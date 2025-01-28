@@ -1,0 +1,21 @@
+{
+    "name": "Go",
+    "image": "mcr.microsoft.com/devcontainers/go:1-1.23",
+    "features": {
+        "ghcr.io/devcontainers/features/kubectl-helm-minikube:1": {},
+        "ghcr.io/devcontainers-contrib/features/kubectx-kubens": {},
+        "ghcr.io/mpriscella/features/kind": {}
+    },
+    "mounts": [
+        "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.ssh,target=/home/vscode/.ssh,type=bind,consistency=cached"
+    ],
+    "postStartCommand": [
+        "git",
+        "config",
+        "--global",
+        "--add",
+        "safe.directory",
+        "/workspaces/datadog-csi-driver"
+    ]
+}
