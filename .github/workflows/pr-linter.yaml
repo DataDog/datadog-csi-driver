@@ -1,0 +1,22 @@
+name: pull request linter
+on:
+  pull_request_target:
+    types: [opened, labeled, unlabeled, synchronize]
+permissions: {}
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+          with:
+            ref: ${{ github.head_ref }}
+      - name: Verify Pull Request Labels
+        uses: jesusvasquez333/verify-pr-label-action@v1.4.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          valid-labels: 'bug, enhancement, refactoring, documentation, tooling, dependencies'
+          pull-request-number: '${{ github.event.pull_request.number }}'
+          disable-reviews: true
