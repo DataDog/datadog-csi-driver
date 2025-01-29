@@ -27,6 +27,7 @@ func main() {
 	}
 
 	// Setup grpc server
+	// TODO: check if it is necessary to use TLS in the grpc server
 	grpcServer := grpc.NewServer()
 	csi.RegisterIdentityServer(grpcServer, csiDriver)
 	csi.RegisterNodeServer(grpcServer, csiDriver)
