@@ -31,7 +31,7 @@ func EnsureSocketAvailability(unixEndpoint string) (address string, err error) {
 		return "", fmt.Errorf("%q is not a unix endpoint", unixEndpoint)
 	}
 
-	if err := removeFile(address); err != nil && !os.IsNotExist(err) {
+	if err := removeFile(address); err != nil && os.IsExist(err) {
 		return "", fmt.Errorf("could not remove unix socket %q: %v", address, err)
 	}
 
