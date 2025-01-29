@@ -29,10 +29,10 @@ func EnsureSocketAvailability(unixEndpoint string) (address string, err error) {
 
 	if scheme := strings.ToLower(parsedURL.Scheme); scheme != "unix" {
 		return "", fmt.Errorf("%q is not a unix endpoint", unixEndpoint)
-	} else {
-		if err := removeFile(address); err != nil && !os.IsNotExist(err) {
-			return "", fmt.Errorf("could not remove unix socket %q: %v", address, err)
-		}
+	}
+
+	if err := removeFile(address); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("could not remove unix socket %q: %v", address, err)
 	}
 
 	if len(parsedURL.Host) == 0 {
