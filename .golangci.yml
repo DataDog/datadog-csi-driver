@@ -1,0 +1,12 @@
+run:
+  timeout: 10m
+  modules-download-mode: readonly
+  tests: false
+  skip-files:
+    - "testing.go"
+    - ".*\\.pb\\.go"
+    - ".*\\.gen\\.go"
+
+linters-settings:
+  misspell:
+    locale: US
