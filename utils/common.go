@@ -27,18 +27,18 @@ func EnsureSocketAvailability(unixEndpoint string) (address string, err error) {
 		return "", errors.New("endpoint path can't be empty")
 	}
 
-	if scheme := strings.ToLower(parsedURL.Scheme); scheme != "unix" {
-		return "", fmt.Errorf("%q is not a unix endpoint", unixEndpoint)
-	}
-
-	if err := removeFile(address); err != nil && os.IsExist(err) {
-		return "", fmt.Errorf("could not remove unix socket %q: %v", address, err)
-	}
-
 	if len(parsedURL.Host) == 0 {
 		address = filepath.FromSlash(parsedURL.Path)
 	} else {
 		address = path.Join(parsedURL.Host, filepath.FromSlash(parsedURL.Path))
+	}
+
+	if scheme := strings.ToLower(parsedURL.Scheme); scheme != "unix" {
+		return "", fmt.Errorf("%q is not a unix endpoint", unixEndpoint)
+	}
+
+	if err := removeFile(address); err != nil && !os.IsNotExist(err) {
+		return "", fmt.Errorf("could not remove unix socket %q: %v", address, err)
 	}
 
 	return address, nil
