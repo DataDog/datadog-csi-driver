@@ -1,3 +1,7 @@
+# Default values for datadog-csi-driver.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
 ## Define the Datadog CSI Driver image to work with
 image:
   # image.tag -- CSI driver image tag to use

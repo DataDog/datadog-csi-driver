@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: {{ .Release.Name }}-node-server
+  name: "{{ include "datadog-csi-driver.name" . }}-node-server"
   namespace: {{ .Release.Namespace }}
 spec:
   selector:
     matchLabels:
-      app: {{ .Release.Name }}-node-server
+      app: "{{ include "datadog-csi-driver.name" . }}-node-server"
   template:
     metadata:
       labels:
-        app: {{ .Release.Name }}-node-server
+        app: "{{ include "datadog-csi-driver.name" . }}-node-server"
     spec:
       hostNetwork: true
       containers:
