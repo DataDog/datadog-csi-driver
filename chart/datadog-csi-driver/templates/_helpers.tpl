@@ -2,7 +2,7 @@
 Expand the name of the chart.
 */}}
 {{- define "datadog-csi-driver.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- default .Chart.Name .Values.nameOverride | trunc 32 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
@@ -22,6 +22,14 @@ If release name contains chart name it will be used as a full name.
 {{- end }}
 {{- end }}
 {{- end }}
+
+{{/*
+Generate the DaemonSet name by appending "-node-server" to the name and truncating to 63 chars.
+*/}}
+{{- define "datadog-csi-driver.daemonsetName" -}}
+{{- printf "%s-node-server" (include "datadog-csi-driver.name" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+    
 
 {{/*
 Create chart name and version as used by the chart label.
