@@ -70,6 +70,3 @@ spec:
             path: /var/run/datadog
             type: DirectoryOrCreate
           name: dsdandapmsocket
-
-
-          
