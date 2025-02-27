@@ -2,6 +2,7 @@ package driver
 
 import (
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
 	"k8s.io/utils/mount"

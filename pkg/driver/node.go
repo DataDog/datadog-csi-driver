@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
+
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
-
-	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
-	"github.com/container-storage-interface/spec/lib/go/csi"
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
