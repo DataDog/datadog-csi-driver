@@ -5,9 +5,8 @@ Datadog CSI volume request must include `mode` and `path` properties in the `vol
 
 Currently, the only supported mode is `socket`.
 
-The socket publisher processes Datadog CSI volume requests as follows:
-- it first verifies that the requested `path` is indeed a UDS socket.
-- if the specified path is not a socket, an error is returned.
-- otherwise, it mounts the socket's parent directory onto the pod's target path.
+The socket publisher processes Datadog CSI volume requests by verifying that the requested path is
+indeed a socket path. If it is verified, the socket is mounted at the pod's target path. An error is
+returned otherwise.
 */
 package publishers

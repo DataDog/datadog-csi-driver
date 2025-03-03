@@ -3,7 +3,6 @@ package publishers
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -20,7 +19,7 @@ type socketPublisher struct {
 // Mount implements Publisher#Mount.
 // It verifies that hostPath is indeed a UDS socket path.
 // If it is not the case, an error is returned.
-// Else, it mounts the socket's parent path onto targetPath
+// Else, it mounts the socket path onto targetPath
 func (s socketPublisher) Mount(targetPath string, hostPath string) error {
 	hostPathIsSocket, err := isSocketPath(hostPath)
 
@@ -32,12 +31,9 @@ func (s socketPublisher) Mount(targetPath string, hostPath string) error {
 		return fmt.Errorf("socket not found at %q", hostPath)
 	}
 
-	// use the parent directory
-	hostPath, _ = filepath.Split(hostPath)
-
 	// Check if the target path exists. Create if not present.
-	if err := createHostPath(s.fs, targetPath, false); err != nil {
-		return fmt.Errorf("failed to create required directory %q: %w", targetPath, err)
+	if err := createHostPath(s.fs, targetPath, true); err != nil {
+		return fmt.Errorf("failed to create required path %q: %w", targetPath, err)
 	}
 
 	notMnt, err := s.mounter.IsLikelyNotMountPoint(targetPath)
