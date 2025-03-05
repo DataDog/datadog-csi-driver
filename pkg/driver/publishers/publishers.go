@@ -17,10 +17,13 @@ type PublisherKind string
 const (
 	// Socket is the publisher kind that allows mounting UDS sockets.
 	Socket PublisherKind = "socket"
+	// Local is the publichser kind that allows mounting local directories.
+	Local = "local"
 )
 
 func GetPublishers(fs afero.Afero, mounter mount.Interface) map[PublisherKind]Publisher {
 	return map[PublisherKind]Publisher{
 		Socket: newSocketPublisher(fs, mounter),
+		Local:  newLocalPublisher(fs, mounter),
 	}
 }
