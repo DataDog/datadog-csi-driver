@@ -54,7 +54,6 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 func isSocketPath(path string) (bool, error) {
 	fileInfo, err := os.Stat(path)
 	if err != nil {
-		klog.Fatal("ERROR - ", err)
 		return false, err
 	}
 	return fileInfo.Mode().Type() == fs.ModeSocket, nil

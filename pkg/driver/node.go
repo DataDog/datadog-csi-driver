@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
-
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/klog"
+
+	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -37,7 +37,7 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 
 	ddVolumeRequest, err := NewDDVolumeRequest(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create dd volume request: %v", err)
 	}
 
 	publisher, found := d.publishers[publishers.PublisherKind(ddVolumeRequest.mode)]
@@ -47,7 +47,7 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 
 	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to perform volume mount: %v", err)
 	}
 
 	return &csi.NodePublishVolumeResponse{}, nil
@@ -80,13 +80,13 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.Nod
 	} else {
 		// Unmount the target path
 		if err := d.mounter.Unmount(targetPath); err != nil {
-			return nil, status.Errorf(codes.Internal, "Failed to unmount target path %q: %v", targetPath, err)
+			return nil, status.Errorf(codes.Internal, "failed to unmount target path %q: %v", targetPath, err)
 		}
 	}
 
 	// After unmounting, you may also want to remove the directory to clean up, depending on your use case.
 	if err := os.RemoveAll(targetPath); err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to remove target path %s: %v", targetPath, err)
+		return nil, status.Errorf(codes.Internal, "failed to remove target path %s: %v", targetPath, err)
 	}
 
 	return &csi.NodeUnpublishVolumeResponse{}, nil
