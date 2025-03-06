@@ -1,0 +1,26 @@
+package publishers
+
+import (
+	"github.com/spf13/afero"
+	"k8s.io/utils/mount"
+)
+
+// Publisher defines logic for mounting and unmounting volumes.
+type Publisher interface {
+	// Mount mounts the hostPath at targetPath
+	Mount(targetPath string, hostPath string) error
+}
+
+// PublisherKind represents the type of the publisher
+type PublisherKind string
+
+const (
+	// Socket is the publisher kind that allows mounting UDS sockets.
+	Socket PublisherKind = "socket"
+)
+
+func GetPublishers(fs afero.Afero, mounter mount.Interface) map[PublisherKind]Publisher {
+	return map[PublisherKind]Publisher{
+		Socket: newSocketPublisher(fs, mounter),
+	}
+}
