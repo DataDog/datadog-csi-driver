@@ -25,7 +25,6 @@ This driver allows mounting `CSI` volumes instead of `hostPath` volumes in pods 
 - Golang setup for development.
 - Docker setup for building the driver.
 
-
 ### CSI Volume Structure
 
 CSI volumes processed by this driver must have the following format:
