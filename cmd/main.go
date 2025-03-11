@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
+	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
 	"github.com/Datadog/datadog-csi-driver/utils"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"google.golang.org/grpc"
@@ -18,6 +19,15 @@ var (
 )
 
 func main() {
+
+	klog.Info("Starting the metrics server")
+	server, err := metrics.BuildServer(metrics.MetricsPort)
+	if err != nil {
+		klog.Fatalf("Failed to create metrics server: %v", err)
+	}
+	stopCh := make(chan struct{})
+	go metrics.RunServer(server, stopCh)
+	defer func() { <-stopCh }()
 
 	// Create CSI driver
 	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag)
