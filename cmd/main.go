@@ -1,16 +1,13 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"net"
-	"os"
+
+	"k8s.io/klog"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
-	"github.com/Datadog/datadog-csi-driver/utils"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc"
-	"k8s.io/klog"
 )
 
 var (
@@ -19,46 +16,17 @@ var (
 )
 
 func main() {
-
-	klog.Info("Starting the metrics server")
-	server, err := metrics.BuildServer(metrics.MetricsPort)
+	metricsServer, err := metrics.NewMetricsServer(metrics.MetricsPort)
 	if err != nil {
-		klog.Fatalf("Failed to create metrics server: %v", err)
-	}
-	stopCh := make(chan struct{})
-	go metrics.RunServer(server, stopCh)
-	defer func() { <-stopCh }()
-
-	// Create CSI driver
-	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag)
-	if err != nil {
-		klog.Error(err.Error())
-		os.Exit(1)
+		klog.Fatalf("failed to create metrics server: %v", err)
 	}
 
-	// Setup grpc server
-	// TODO: check if it is necessary to use TLS in the grpc server
-	grpcServer := grpc.NewServer()
-	csi.RegisterIdentityServer(grpcServer, csiDriver)
-	csi.RegisterNodeServer(grpcServer, csiDriver)
+	ctx, cancel := context.WithCancel(context.Background())
 
-	// Define unix socket listener
-	endpoint := *endpointFlag
-	unixAddress, err := utils.EnsureSocketAvailability(endpoint)
-	if err != nil {
-		klog.Fatalf("Failed to listen on endpoint %q: %v", endpoint, err)
-		os.Exit(1)
+	go metricsServer.Start(ctx)
+	defer cancel()
+
+	if err := registerAndStartCSIDriver(ctx); err != nil {
+		klog.Fatal(err)
 	}
-
-	listener, err := net.Listen("unix", unixAddress)
-	if err != nil {
-		klog.Fatalf("Failed to listen: %v", err)
-	}
-
-	// Start server
-	klog.Info("Starting GRPC server for CSI driver")
-	if err := grpcServer.Serve(listener); err != nil {
-		klog.Fatalf("Failed to serve: %v", err)
-	}
-
 }

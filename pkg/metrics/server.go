@@ -8,12 +8,53 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-
 	"k8s.io/klog/v2"
 )
 
-// BuildServer creates the http.Server struct
-func BuildServer(port int) (*http.Server, error) {
+// MetricsServer is the metrics server interface
+type MetricsServer interface {
+	// Start runs the metrics server.
+	// This should be a blocking call until the context is cancelled or done.
+	Start(ctx context.Context)
+}
+
+// server implements MetricsServer
+type server struct {
+	srv *http.Server
+}
+
+// Start implements MetricsServer#Start
+func (s *server) Start(ctx context.Context) {
+	klog.Info("starting metrics server")
+	// Run server
+	go func() {
+		err := s.srv.ListenAndServe()
+		if err != nil && err != http.ErrServerClosed {
+			klog.Errorf("error starting metrics server: %v", err)
+		}
+	}()
+
+	// Shutdown server when context is done
+	<-ctx.Done()
+	if err := s.close(); err != nil {
+		klog.Errorf("error closing metrics server: %v", err)
+	}
+}
+
+// close closes the http server
+func (s *server) close() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := s.srv.Shutdown(ctx); err != nil {
+		klog.Warningf("Problem shutting down metrics HTTP server: %v", err)
+		return err
+	}
+	return nil
+}
+
+// buildServer creates the http.Server struct
+func buildServer(port int) (*server, error) {
+
 	if port <= 0 {
 		klog.Error("invalid port for metric server")
 		return nil, errors.New("invalid port for metrics server")
@@ -27,28 +68,10 @@ func BuildServer(port int) (*http.Server, error) {
 		Handler: router,
 	}
 
-	return srv, nil
+	return &server{srv}, nil
 }
 
-// StopServer stops the metrics server
-func StopServer(srv *http.Server) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := srv.Shutdown(ctx); err != nil {
-		klog.Warningf("Problem shutting down HTTP server: %v", err)
-	}
-}
-
-// RunServer starts the metrics server.
-func RunServer(srv *http.Server, stopCh <-chan struct{}) {
-	go func() {
-		err := srv.ListenAndServe()
-		if err != nil && err != http.ErrServerClosed {
-			klog.Errorf("error starting metrics server: %v", err)
-		}
-	}()
-	<-stopCh
-	if err := srv.Close(); err != nil {
-		klog.Errorf("error closing metrics server: %v", err)
-	}
+// NewMetricsServer creates a new metrics server
+func NewMetricsServer(port int) (MetricsServer, error) {
+	return buildServer(port)
 }

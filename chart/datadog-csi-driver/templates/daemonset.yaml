@@ -27,6 +27,7 @@ spec:
           ports:
             - containerPort: 5000
               protocol: TCP 
+              name: metrics
           args:
             - /dd-csi-driver
           volumeMounts:
