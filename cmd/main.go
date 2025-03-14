@@ -22,9 +22,9 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	go metricsServer.Start(ctx)
-	defer cancel()
 
 	if err := registerAndStartCSIDriver(ctx); err != nil {
 		klog.Fatal(err)
