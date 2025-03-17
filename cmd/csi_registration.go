@@ -12,6 +12,8 @@ import (
 	"k8s.io/klog"
 )
 
+// registerAndStartCSIDriver registers the CSI driver and starts it
+// This is a blocking operation.
 func registerAndStartCSIDriver(ctx context.Context) error {
 	// Create CSI driver
 	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag)
@@ -38,24 +40,18 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	// Starting the GRPC server for CSI
 	errChan := make(chan error, 1)
+	defer close(errChan)
 
+	// Starting the GRPC server for CSI
 	klog.Info("starting GRPC server for CSI driver")
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil {
-			klog.Errorf("failed to serve: %v", err)
+			errChan <- fmt.Errorf("csi grpc failed to serve: %v", err)
 		}
 	}()
+	defer grpcServer.GracefulStop()
 
-	// Listen for context cancellation to stop the server
-	go func() {
-		<-ctx.Done()
-		klog.Info("stopping GRPC server for CSI driver")
-		grpcServer.GracefulStop()
-	}()
-
-	// Wait for either an error or context cancellation
 	select {
 	case err := <-errChan:
 		return err

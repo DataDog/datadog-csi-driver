@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -15,7 +16,8 @@ import (
 type MetricsServer interface {
 	// Start runs the metrics server.
 	// This should be a blocking call until the context is cancelled or done.
-	Start(ctx context.Context)
+	// This whould call wg.Done() before exiting
+	Start(ctx context.Context, errChan chan error, wg *sync.WaitGroup)
 }
 
 // server implements MetricsServer
@@ -24,13 +26,15 @@ type server struct {
 }
 
 // Start implements MetricsServer#Start
-func (s *server) Start(ctx context.Context) {
+func (s *server) Start(ctx context.Context, errChan chan error, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	klog.Info("starting metrics server")
 	// Run server
 	go func() {
 		err := s.srv.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
-			klog.Errorf("error starting metrics server: %v", err)
+			errChan <- fmt.Errorf("error starting metrics server: %v", err)
 		}
 	}()
 
