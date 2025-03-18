@@ -39,7 +39,10 @@ func run() error {
 
 	// Start metrics server
 	wg.Add(1)
-	go metricsServer.Start(ctx, errChan, wg)
+	go func() {
+		metricsServer.Start(ctx, errChan)
+		wg.Done()
+	}()
 
 	wg.Add(1)
 	go func() {
@@ -50,14 +53,17 @@ func run() error {
 	}()
 
 	err = <-errChan
-	cancel()  // cancelling the context allows stopping both the grpc and the metrics server in case of error
+	cancel() // cancelling the context allows stopping both the grpc and the metrics server in case of error
+	klog.Info("Waiting for servers to stop gracefully.")
 	wg.Wait() // block until all goroutines have finished
+	klog.Info("Gracefull stop finished.")
 	return err
 }
 
 func main() {
 	if err := run(); err != nil {
 		klog.Error(err)
+		klog.Flush()
 		os.Exit(1)
 	}
 }
