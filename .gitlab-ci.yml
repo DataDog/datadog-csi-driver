@@ -22,7 +22,7 @@ tests:
   image: registry.ddbuild.io/images/mirror/golang:1.23.4
   tags: ["arch:amd64"]
   script:
-    - go test -v ./...
+    - make test
 
 build_image:
   stage: build_image
@@ -32,11 +32,5 @@ build_image:
   variables:
     TARGET_IMAGE: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:v${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
     RELEASE_IMAGE: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:$CI_COMMIT_TAG
-  script: |-
-    IMG=$TARGET_IMAGE \
-    docker buildx build . \
-    --build-arg LDFLAGS="${LDFLAGS}" \
-    --platform=linux/arm64,linux/amd64 \
-    --label target=build \
-    --push \
-    --tag ${TARGET_IMAGE} ${RELEASE_IMAGE_TAG}
+  script:
+    - IMG=$TARGET_IMAGE make docker-buildx-ci
