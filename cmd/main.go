@@ -1,15 +1,15 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"net"
+	"fmt"
 	"os"
+	"sync"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
-	"github.com/Datadog/datadog-csi-driver/utils"
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc"
-	"k8s.io/klog"
+	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
+	"k8s.io/klog/v2"
 )
 
 var (
@@ -17,38 +17,53 @@ var (
 	endpointFlag   = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
 )
 
+// run creates and runs the metrics server and the csi driver grpc server
+// It can only return a non-nil error
+// It provides no guarantee on the order by which the servers are started.
+// It guarantees that if an error occurs in one server, both servers are shutdown.
+func run() error {
+	// wait group used to ensure that all go routines terminate before returning an error from this function
+	wg := &sync.WaitGroup{}
+
+	errChan := make(chan error)
+	defer close(errChan)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Create metrics server
+	metricsServer, err := metrics.NewMetricsServer(metrics.MetricsPort)
+	if err != nil {
+		return fmt.Errorf("failed to create metrics server: %v", err)
+	}
+
+	// Start metrics server
+	wg.Add(1)
+	go func() {
+		metricsServer.Start(ctx, errChan)
+		wg.Done()
+	}()
+
+	wg.Add(1)
+	go func() {
+		if err := registerAndStartCSIDriver(ctx); err != nil {
+			errChan <- fmt.Errorf("failed starting csi driver: %v", err)
+		}
+		wg.Done()
+	}()
+
+	err = <-errChan
+	cancel() // cancelling the context allows stopping both the grpc and the metrics server in case of error
+	klog.Info("Waiting for servers to stop gracefully.")
+	wg.Wait() // block until all goroutines have finished
+	klog.Info("Gracefull stop finished.")
+	return err
+}
+
 func main() {
-
-	// Create CSI driver
-	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag)
-	if err != nil {
-		klog.Error(err.Error())
+	if err := run(); err != nil {
+		klog.Error(err)
+		klog.Flush()
 		os.Exit(1)
 	}
-
-	// Setup grpc server
-	// TODO: check if it is necessary to use TLS in the grpc server
-	grpcServer := grpc.NewServer()
-	csi.RegisterIdentityServer(grpcServer, csiDriver)
-	csi.RegisterNodeServer(grpcServer, csiDriver)
-
-	// Define unix socket listener
-	endpoint := *endpointFlag
-	unixAddress, err := utils.EnsureSocketAvailability(endpoint)
-	if err != nil {
-		klog.Fatalf("Failed to listen on endpoint %q: %v", endpoint, err)
-		os.Exit(1)
-	}
-
-	listener, err := net.Listen("unix", unixAddress)
-	if err != nil {
-		klog.Fatalf("Failed to listen: %v", err)
-	}
-
-	// Start server
-	klog.Info("Starting GRPC server for CSI driver")
-	if err := grpcServer.Serve(listener); err != nil {
-		klog.Fatalf("Failed to serve: %v", err)
-	}
-
 }

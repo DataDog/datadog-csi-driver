@@ -11,6 +11,7 @@ spec:
     metadata:
       labels:
         app: {{ include "datadog-csi-driver.daemonsetName" . }}
+        admission.datadoghq.com/enabled: "false"
     spec:
       hostNetwork: true
       containers:
@@ -22,7 +23,11 @@ spec:
     {{ toYaml .Values.image.pullSecrets | indent 8 }}
           {{- end }}
           securityContext:
-            privileged: true  
+            privileged: true 
+          ports:
+            - containerPort: 5000
+              protocol: TCP 
+              name: metrics
           args:
             - /dd-csi-driver
           volumeMounts:

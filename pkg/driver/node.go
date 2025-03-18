@@ -11,6 +11,7 @@ import (
 	"k8s.io/klog"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
+	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -37,19 +38,23 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 
 	ddVolumeRequest, err := NewDDVolumeRequest(req)
 	if err != nil {
+		metrics.RecordVolumeMountAttempt("", "", metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to create dd volume request: %v", err)
 	}
 
 	publisher, found := d.publishers[publishers.PublisherKind(ddVolumeRequest.mode)]
 	if !found {
+		metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusFailed)
 		return nil, fmt.Errorf("invalid mode: %q", ddVolumeRequest.mode)
 	}
 
 	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
 	if err != nil {
+		metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to perform volume mount: %v", err)
 	}
 
+	metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusSuccess)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -69,8 +74,12 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.Nod
 			// If the target path doesn't exist, there's nothing to unmount,
 			// but we return success because from a CSI perspective, the volume is no longer published.
 			klog.Info("Target path does not exist, nothing to unmount.")
+			metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
 			return &csi.NodeUnpublishVolumeResponse{}, nil
 		}
+
+		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
+		klog.Infof("Failed to check if target path is a mount point: %v", err)
 		return nil, status.Errorf(codes.Internal, "Failed to check if target path is a mount point: %v", err)
 	}
 
@@ -80,14 +89,18 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.Nod
 	} else {
 		// Unmount the target path
 		if err := d.mounter.Unmount(targetPath); err != nil {
+			metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
+			klog.Infof("failed to unmount target path %q: %v", targetPath, err)
 			return nil, status.Errorf(codes.Internal, "failed to unmount target path %q: %v", targetPath, err)
 		}
 	}
 
 	// After unmounting, you may also want to remove the directory to clean up, depending on your use case.
 	if err := os.RemoveAll(targetPath); err != nil {
+		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
 		return nil, status.Errorf(codes.Internal, "failed to remove target path %s: %v", targetPath, err)
 	}
 
+	metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
