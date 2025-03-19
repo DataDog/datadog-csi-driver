@@ -20,16 +20,14 @@ type DatadogCSIDriver struct {
 }
 
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name string) (*DatadogCSIDriver, error) {
+func NewDatadogCSIDriver(name, version string) (*DatadogCSIDriver, error) {
 	fs := afero.Afero{Fs: afero.NewOsFs()}
 	mounter := mount.New("")
 
 	return &DatadogCSIDriver{
 		name: name,
 
-		// hardcoded for now
-		// TODO: allow setting version dynamically on build
-		version: "v1",
+		version: version,
 
 		publishers: publishers.GetPublishers(fs, mounter),
 		fs:         fs,
