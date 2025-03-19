@@ -19,6 +19,11 @@ type DatadogCSIDriver struct {
 	mounter    mount.Interface
 }
 
+// Version returns the CSI driver version
+func (driver *DatadogCSIDriver) Version() string {
+	return driver.version
+}
+
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
 func NewDatadogCSIDriver(name, version string) (*DatadogCSIDriver, error) {
 	fs := afero.Afero{Fs: afero.NewOsFs()}

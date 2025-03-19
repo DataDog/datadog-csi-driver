@@ -5,7 +5,8 @@ WORKDIR /workspace
 COPY . .
 
 # Ensure the build command targets the main package.
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o dd-csi-driver ./cmd/...
+ARG LDFLAGS=""
+RUN CGO_ENABLED=0 GOOS=linux go build -a -a -ldflags="$LDFLAGS" -o dd-csi-driver ./cmd/...
 
 # Alpine's latest tag supports multiple architectures.
 FROM alpine:latest

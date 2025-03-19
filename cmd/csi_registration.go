@@ -16,11 +16,14 @@ import (
 // This is a blocking operation.
 func registerAndStartCSIDriver(ctx context.Context) error {
 	// Create CSI driver
-	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag, version)
+ 	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag, Version)
 	if err != nil {
 		klog.Error(err.Error())
 		return err
 	}
+
+	// Log the version
+	klog.Infof("Created Datadog CSI Driver version %v", csiDriver.Version())
 
 	// Setup grpc server
 	// TODO: check if it is necessary to use TLS in the grpc server
