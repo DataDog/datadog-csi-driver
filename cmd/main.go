@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	Version        = "dev" // This will be set when building the driver
 	driverNameFlag = flag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
 	endpointFlag   = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
 )
