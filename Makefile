@@ -10,7 +10,6 @@ build:
 	  --platform=$(PLATFORM) \
 	  $(foreach label,$(LABELS),--label $(label)) \
 	  --tag $(DOCKER_IMAGE) \
-	  --push \
 	  .
 
 docker-buildx-ci:
