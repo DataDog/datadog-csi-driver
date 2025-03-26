@@ -4,6 +4,7 @@ variables:
   PROJECTNAME: "datadog-csi-driver"
   BUILD_DOCKER_REGISTRY: "registry.ddbuild.io/ci"
   JOB_DOCKER_IMAGE: "registry.ddbuild.io/ci-containers-project:v50051243-ace27e7-v1.22"
+  PUBLIC_IMAGE_NAME: "csi-driver"
 cache: &global_cache
   key: ${CI_COMMIT_REF_SLUG}
   paths:
@@ -31,6 +32,51 @@ build_image:
     RELEASE_IMAGE: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:$CI_COMMIT_TAG
   script:
     - IMG=$TARGET_IMAGE make docker-buildx-ci
+
+publish_public_main:
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success
+    - when: never
+  trigger:
+    project: DataDog/public-images
+    branch: main
+    strategy: depend
+  variables:
+    IMG_SOURCES: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:v${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
+    IMG_DESTINATIONS: $PUBLIC_IMAGE_NAME:main
+    IMG_SIGNING: "false"
+
+publish_public_tag:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+    - when: never
+  trigger:
+    project: DataDog/public-images
+    branch: main
+    strategy: depend
+  variables:
+    IMG_SOURCES: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:$CI_COMMIT_TAG
+    IMG_DESTINATIONS: $PUBLIC_IMAGE_NAME:$CI_COMMIT_TAG
+    IMG_SIGNING: "false"
+
+publish_public_latest:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: manual
+    - when: never
+  trigger:
+    project: DataDog/public-images
+    branch: main
+    strategy: depend
+  variables:
+    IMG_SOURCES: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:$CI_COMMIT_TAG
+    IMG_DESTINATIONS: $PUBLIC_IMAGE_NAME:latest
+    IMG_SIGNING: "false"
 
 trigger_internal_image:
   stage: release
