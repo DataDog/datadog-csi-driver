@@ -16,7 +16,14 @@ import (
 // This is a blocking operation.
 func registerAndStartCSIDriver(ctx context.Context) error {
 	// Create CSI driver
- 	csiDriver, err := driver.NewDatadogCSIDriver(*driverNameFlag, Version)
+
+	csiDriver, err := driver.NewDatadogCSIDriver(
+		*driverNameFlag,
+		*datadogSocketsHostpath,
+		*dsdHostSocketFileName,
+		*apmHostSocketFileName,
+		Version,
+	)
 	if err != nil {
 		klog.Error(err.Error())
 		return err
