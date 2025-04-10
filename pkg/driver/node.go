@@ -36,7 +36,8 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 		volumeCtx,
 	)
 
-	ddVolumeRequest, err := NewDDVolumeRequest(req)
+	ddVolumeRequest, err := d.DDVolumeRequest(req)
+
 	if err != nil {
 		metrics.RecordVolumeMountAttempt("", "", metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to create dd volume request: %v", err)
@@ -44,17 +45,17 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 
 	publisher, found := d.publishers[publishers.PublisherKind(ddVolumeRequest.mode)]
 	if !found {
-		metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusFailed)
+		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
 		return nil, fmt.Errorf("invalid mode: %q", ddVolumeRequest.mode)
 	}
 
 	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
 	if err != nil {
-		metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusFailed)
+		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to perform volume mount: %v", err)
 	}
 
-	metrics.RecordVolumeMountAttempt(ddVolumeRequest.mode, ddVolumeRequest.path, metrics.StatusSuccess)
+	metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusSuccess)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 

@@ -31,7 +31,7 @@ func newCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
 var nodeVolumeMountAttempts = newCounterVec(
 	"node_publish_volume_attempts",
 	"Counts the number of publish volume requests received by the csi node server",
-	"mode",
+	"type",
 	"path",
 	"status",
 )
@@ -49,8 +49,8 @@ func init() {
 }
 
 // RecordVolumeMountAttempt records a volume mount attempt
-func RecordVolumeMountAttempt(mode, path string, status Status) {
-	nodeVolumeMountAttempts.WithLabelValues(mode, path, string(status)).Inc()
+func RecordVolumeMountAttempt(volumeType, path string, status Status) {
+	nodeVolumeMountAttempts.WithLabelValues(volumeType, path, string(status)).Inc()
 }
 
 // RecordVolumeUnMountAttempt records a volume unmount attempt
