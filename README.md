@@ -6,16 +6,18 @@ This driver allows mounting `CSI` volumes instead of `hostPath` volumes in pods 
 
 ## Features <!-- omit in toc -->
 
-- **Mounting UDS sockets**: Supported using the `socket` mode.
-- **Mounting local directories**: Supported using `local` mode.
+- **Mounting Datadog dogstatsd socket**: Supported using the `DSDSocket` type.
+- **Mounting Datadog trace agent socket**: Supported using `APMSocket` type.
+- **Mounting Datadog agent sockets directory**: Supported using `DatadogSocketsDirectory` type.
 
 ## Table of Contents <!-- omit in toc -->
 
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [CSI Volume Structure](#csi-volume-structure)
-    - [Socket Mode](#socket-mode)
-    - [Local Mode](#local-mode)
+    - [DSDSocket](#dsdsocket)
+    - [APMSocket](#apmsocket)
+    - [DatadogSocketsDirectory](#datadogsocketsdirectory)
 - [License](#license)
 
 ## Getting Started
@@ -33,18 +35,15 @@ CSI volumes processed by this driver must have the following format:
 csi:
     driver: k8s.csi.datadoghq.com
     volumeAttributes:
-        mode: <mount-mode>
-        path: <mount-path>
+        type: <volume-type>
 name: <volume-name>
 ```
 
-Currently, two modes are supported:
+Currently, 3 types are supported:
 
-#### Socket Mode
+#### DSDSocket
 
-This mode is useful for mounting a UDS socket file.
-
-The UDS socket file path should be specified in the `path` attribute and the mode should be set to `socket`.
+This type is useful for mounting a dogstatsd UDS socket file.
 
 For example:
 
@@ -52,18 +51,31 @@ For example:
 csi:
     driver: k8s.csi.datadoghq.com
     volumeAttributes:
-        mode: socket
-        path: /var/run/datadog/dsd.socket
+        type: DSDSocket
 name: datadog-dsd
 ```
 
-In case the indicated `path` doesn't correspond to a UDS socket, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
+In case the indicated socket doesn't exist, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
 
-#### Local Mode
+#### APMSocket
 
-This mode is useful for mounting a directory.
+This type is useful for mounting a trace agent UDS socket file.
 
-The directory path should be specified in the `path` attribute, and the mode should be set to `local`.
+For example:
+
+```
+csi:
+    driver: k8s.csi.datadoghq.com
+    volumeAttributes:
+        type: APMSocket
+name: datadog-apm
+```
+
+In case the indicated socket doesn't exist, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
+
+#### DatadogSocketsDirectory
+
+This mode is useful for mounting the directory containing the sockets of dogstatsd and apm.
 
 For example:
 
@@ -72,12 +84,9 @@ csi:
     driver: k8s.csi.datadoghq.com
     readOnly: false
     volumeAttributes:
-        mode: local
-        path: /var/run/datadog
+        type: DatadogSocketsDirectory
 name: datadog
 ```
-
-If the specified path is not found, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
 
 ## License
 
