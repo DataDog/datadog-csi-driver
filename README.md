@@ -31,15 +31,26 @@ This driver allows mounting `CSI` volumes instead of `hostPath` volumes in pods 
 
 CSI volumes processed by this driver must have the following format:
 
-```
-csi:
-    driver: k8s.csi.datadoghq.com
-    volumeAttributes:
-        type: <volume-type>
-name: <volume-name>
+```yaml
+# maybe you can put this example with a Pod manifest context adding the full path
+
+kind: Pod
+metadata:
+  name: foo
+spec:
+  containers:
+    volumes:
+      - csi:
+          driver: k8s.csi.datadoghq.com
+          volumeAttributes:
+            type: <volume-type>
+        name: <volume-name>
 ```
 
 Currently, 3 types are supported:
+* DSDSocket
+* APMSocket
+* DatadogSocketsDirectory
 
 #### DSDSocket
 
@@ -47,7 +58,7 @@ This type is useful for mounting a dogstatsd UDS socket file.
 
 For example:
 
-```
+```yaml
 csi:
     driver: k8s.csi.datadoghq.com
     volumeAttributes:
@@ -63,7 +74,7 @@ This type is useful for mounting a trace agent UDS socket file.
 
 For example:
 
-```
+```yaml
 csi:
     driver: k8s.csi.datadoghq.com
     volumeAttributes:
@@ -79,7 +90,7 @@ This mode is useful for mounting the directory containing the sockets of dogstat
 
 For example:
 
-```
+```yaml
 csi:
     driver: k8s.csi.datadoghq.com
     readOnly: false
