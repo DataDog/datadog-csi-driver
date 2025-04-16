@@ -6,18 +6,18 @@ This driver allows mounting `CSI` volumes instead of `hostPath` volumes in pods 
 
 ## Features <!-- omit in toc -->
 
-- **Mounting Datadog dogstatsd socket**: Supported using the `DSDSocket` type.
-- **Mounting Datadog trace agent socket**: Supported using `APMSocket` type.
-- **Mounting Datadog agent sockets directory**: Supported using `DatadogSocketsDirectory` type.
+- **Mounting Datadog dogstatsd socket**: Supported using the `DSDSocket` or `DSDSocketDirectory` volume type.
+- **Mounting Datadog trace agent socket**: Supported using `APMSocket` or `APMSocketDirectory` volume type.
 
 ## Table of Contents <!-- omit in toc -->
 
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [CSI Volume Structure](#csi-volume-structure)
-    - [DSDSocket](#dsdsocket)
     - [APMSocket](#apmsocket)
-    - [DatadogSocketsDirectory](#datadogsocketsdirectory)
+    - [APMSocketDirectory](#apmsocketdirectory)
+    - [DSDSocket](#dsdsocket)
+    - [DSDSocketDirectory](#dsdsocketdirectory)
 - [License](#license)
 
 ## Getting Started
@@ -39,23 +39,42 @@ csi:
 name: <volume-name>
 ```
 
-Currently, 3 types are supported:
-
-#### DSDSocket
-
-This type is useful for mounting a dogstatsd UDS socket file.
-
 For example:
 
-```
-csi:
-    driver: k8s.csi.datadoghq.com
-    volumeAttributes:
-        type: DSDSocket
-name: datadog-dsd
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-name
+spec:
+  containers:
+    - name: ubuntu
+      image: ubuntu
+      command: ["/bin/bash", "-c", "--"]
+      args: ["while true; do sleep 30; echo hello-ubuntu; done;"]
+      volumeMounts:
+        - mountPath: /var/sockets/apm/
+          name: dd-csi-volume-apm-dir
+        - mountPath: /var/sockets/dsd/dsd.sock
+          name: dd-csi-volume-dsd
+  volumes:
+    - name: dd-csi-volume-dsd
+      csi:
+        driver: k8s.csi.datadoghq.com
+        volumeAttributes:
+          type: DSDSocket
+    - name: dd-csi-volume-apm-dir
+      csi:
+        driver: k8s.csi.datadoghq.com
+        volumeAttributes:
+          type: APMSocketDirectory
 ```
 
-In case the indicated socket doesn't exist, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
+Currently, 4 types are supported:
+* APMSocket
+* APMSocketDirectory
+* DSDSocket
+* DSDSocketDirectory
 
 #### APMSocket
 
@@ -73,9 +92,9 @@ name: datadog-apm
 
 In case the indicated socket doesn't exist, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
 
-#### DatadogSocketsDirectory
+#### APMSocketDirectory
 
-This mode is useful for mounting the directory containing the sockets of dogstatsd and apm.
+This mode is useful for mounting the directory containing the apm socket.
 
 For example:
 
@@ -84,7 +103,38 @@ csi:
     driver: k8s.csi.datadoghq.com
     readOnly: false
     volumeAttributes:
-        type: DatadogSocketsDirectory
+        type: APMSocketDirectory
+name: datadog
+```
+
+#### DSDSocket
+
+This type is useful for mounting a dogstatsd UDS socket file.
+
+For example:
+
+```
+csi:
+    driver: k8s.csi.datadoghq.com
+    volumeAttributes:
+        type: DSDSocket
+name: datadog-dsd
+```
+
+In case the indicated socket doesn't exist, the mount operation will fail, and the pod will be blocked in `ContainerCreating` phase.
+
+#### DSDSocketDirectory
+
+This mode is useful for mounting the directory containing the dogstatsd socket.
+
+For example:
+
+```
+csi:
+    driver: k8s.csi.datadoghq.com
+    readOnly: false
+    volumeAttributes:
+        type: DSDSocketDirectory
 name: datadog
 ```
 

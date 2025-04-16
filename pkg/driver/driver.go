@@ -15,14 +15,8 @@ type DatadogCSIDriver struct {
 	name    string
 	version string
 
-	// datadogSocketsHostPath is the directory in the which the datadog sockets can be found on the host
-	datadogSocketsHostPath string
-
-	// Dogstatsd socket file name
-	dsdHostSocketFileName string
-
-	// APM socket file name
-	apmHostSocketFileName string
+	apmHostSocketPath string
+	dsdHostSocketPath string
 
 	publishers map[publishers.PublisherKind]publishers.Publisher
 	fs         afero.Afero
@@ -35,7 +29,7 @@ func (driver *DatadogCSIDriver) Version() string {
 }
 
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name, datadogSocketsHostPath, dsdHostSocketFileName, apmHostSocketFileName, version string) (*DatadogCSIDriver, error) {
+func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, version string) (*DatadogCSIDriver, error) {
 	fs := afero.Afero{Fs: afero.NewOsFs()}
 	mounter := mount.New("")
 
@@ -44,9 +38,8 @@ func NewDatadogCSIDriver(name, datadogSocketsHostPath, dsdHostSocketFileName, ap
 
 		version: version,
 
-		datadogSocketsHostPath: datadogSocketsHostPath,
-		dsdHostSocketFileName:  dsdHostSocketFileName,
-		apmHostSocketFileName:  apmHostSocketFileName,
+		apmHostSocketPath: apmHostSocketPath,
+		dsdHostSocketPath: dsdHostSocketPath,
 
 		publishers: publishers.GetPublishers(fs, mounter),
 		fs:         fs,

@@ -13,10 +13,15 @@ type VolumeType string
 const (
 	// APMSocket mounts the apm socket file after verifying the existence of the file
 	APMSocket VolumeType = "APMSocket"
+
+	// APMSocketDirectory mounts the parent directory of the apm socket
+	APMSocketDirectory VolumeType = "APMSocketDirectory"
+
 	// DSDSocket mounts the dogstatsd socket file after verifying the existence of the file
-	DSDSocket = "DSDSocket"
-	// DatadogSocketsDirectory mounts the directory containing the apm and dogstatsd sockets
-	DatadogSocketsDirectory = "DatadogSocketsDirectory"
+	DSDSocket VolumeType = "DSDSocket"
+
+	// DSDSocketDirectory mounts the parent directory of the dogstatsd socket
+	DSDSocketDirectory VolumeType = "DSDSocketDirectory"
 )
 
 type Mode string
@@ -28,16 +33,19 @@ const (
 	ModeLocal = "local"
 )
 
-func getModeAndPath(volumeType VolumeType, datadogSocketsDirectory, dsdSocketFileName, apmSocketFileName string) (mode Mode, path string, err error) {
+func getModeAndPath(volumeType VolumeType, apmHostSocketPath, dsdHostSocketPath string) (mode Mode, path string, err error) {
 	switch volumeType {
 	case APMSocket:
-		path = filepath.Join(datadogSocketsDirectory, apmSocketFileName)
+		path = apmHostSocketPath
 		mode = ModeSocket
+	case APMSocketDirectory:
+		path = filepath.Dir(apmHostSocketPath)
+		mode = ModeLocal
 	case DSDSocket:
-		path = filepath.Join(datadogSocketsDirectory, dsdSocketFileName)
+		path = dsdHostSocketPath
 		mode = ModeSocket
-	case DatadogSocketsDirectory:
-		path = datadogSocketsDirectory
+	case DSDSocketDirectory:
+		path = filepath.Dir(dsdHostSocketPath)
 		mode = ModeLocal
 	default:
 		err = fmt.Errorf("unsupported volume type %q", volumeType)
@@ -69,7 +77,7 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 		return nil, errors.New("missing property 'type' in CSI volume context")
 	}
 
-	mode, path, err := getModeAndPath(VolumeType(volumeType), d.datadogSocketsHostPath, d.dsdHostSocketFileName, d.apmHostSocketFileName)
+	mode, path, err := getModeAndPath(VolumeType(volumeType), d.apmHostSocketPath, d.dsdHostSocketPath)
 	if err != nil {
 		return nil, err
 	}

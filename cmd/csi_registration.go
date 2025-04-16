@@ -19,9 +19,8 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 
 	csiDriver, err := driver.NewDatadogCSIDriver(
 		*driverNameFlag,
-		*datadogSocketsHostpath,
-		*dsdHostSocketFileName,
-		*apmHostSocketFileName,
+		*apmHostSocketPath,
+		*dsdHostSocketPath,
 		Version,
 	)
 	if err != nil {

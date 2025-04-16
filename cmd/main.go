@@ -13,12 +13,11 @@ import (
 )
 
 var (
-	Version                = "dev" // This will be set when building the driver
-	driverNameFlag         = flag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
-	endpointFlag           = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
-	datadogSocketsHostpath = flag.String("dd-sockets-hostpath", "/var/run/datadog/", "Host path where datadog apm and dogstatsd sockets are stored")
-	dsdHostSocketFileName  = flag.String("dsd-socket-file", "dsd.socket", "Dogstatsd socket file name")
-	apmHostSocketFileName  = flag.String("apm-socket-file", "apm.socket", "APM socket file name")
+	Version           = "dev" // This will be set when building the driver
+	driverNameFlag    = flag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
+	endpointFlag      = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
+	dsdHostSocketPath = flag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
+	apmHostSocketPath = flag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
 )
 
 // run creates and runs the metrics server and the csi driver grpc server
