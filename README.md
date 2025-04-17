@@ -98,7 +98,7 @@ This mode is useful for mounting the directory containing the apm socket.
 
 For example:
 
-```
+```yaml
 csi:
     driver: k8s.csi.datadoghq.com
     readOnly: false
