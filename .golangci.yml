@@ -7,6 +7,16 @@ run:
     - ".*\\.pb\\.go"
     - ".*\\.gen\\.go"
 
+linters:
+  enable:
+    - goheader
+
 linters-settings:
   misspell:
     locale: US
+  goheader:
+    template: |-
+      Datadog datadog-csi driver
+      Copyright 2025-present Datadog, Inc.
+
+      This product includes software developed at Datadog (https://www.datadoghq.com/).
