@@ -26,5 +26,3 @@ test:
 .PHONY: build
 .PHONY: docker-buildx-ci
 .PHONY: test
-.PHONY: release
-
