@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net"
 
@@ -21,6 +22,8 @@ import (
 // This is a blocking operation.
 func registerAndStartCSIDriver(ctx context.Context) error {
 	// Create CSI driver
+
+	flag.Parse()
 
 	csiDriver, err := driver.NewDatadogCSIDriver(
 		*driverNameFlag,

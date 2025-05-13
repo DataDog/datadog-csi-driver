@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer-dsdsocketdirectory
+spec:
+  containers:
+  - name: consumer-dsdsocketdirectory
+    image: alpine/socat
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Hello from DSDSocketDirectory" | socat - UNIX-CONNECT:/csi-mount/dsd.sock;
+          sleep 1;
+        done
+    volumeMounts:
+    - name: dd-csi-volume
+      mountPath: /csi-mount
+  volumes:
+  - name: dd-csi-volume
+    csi:
+      driver: k8s.csi.datadoghq.com
+      volumeAttributes:
+        type: DSDSocketDirectory

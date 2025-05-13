@@ -54,6 +54,7 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 		return nil, fmt.Errorf("invalid mode: %q", ddVolumeRequest.mode)
 	}
 
+	klog.Infof("Received volume request: %v", *ddVolumeRequest)
 	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
 	if err != nil {
 		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
