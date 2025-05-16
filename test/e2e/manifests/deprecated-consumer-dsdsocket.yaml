@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: deprecated-consumer-dsdsocket
+spec:
+  containers:
+  - name: deprecated-consumer-dsdsocket
+    image: alpine/socat
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Hello from deprecated DSDSocket" | socat - UNIX-CONNECT:/dsd.sock;
+          sleep 1;
+        done
+    volumeMounts:
+    - name: dd-csi-volume
+      mountPath: /dsd.sock
+  volumes:
+  - name: dd-csi-volume
+    csi:
+      driver: k8s.csi.datadoghq.com
+      volumeAttributes:
+        mode: socket
+        path: /socket-dir/dsd.sock

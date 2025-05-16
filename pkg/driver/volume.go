@@ -78,13 +78,42 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 	volumeId := req.GetVolumeId()
 	volumeCtx := req.GetVolumeContext()
 	volumeType, foundType := volumeCtx["type"]
-	if !foundType {
-		return nil, errors.New("missing property 'type' in CSI volume context")
-	}
 
-	mode, path, err := getModeAndPath(VolumeType(volumeType), d.apmHostSocketPath, d.dsdHostSocketPath)
-	if err != nil {
-		return nil, err
+	// Kept to avoid breaking backwards compatibility
+	volumePath, foundPath := volumeCtx["path"]
+	volumeMode, foundMode := volumeCtx["mode"]
+
+	var mode Mode
+	var path string
+
+	if foundType {
+		// Using new schema
+		var err error
+		mode, path, err = getModeAndPath(VolumeType(volumeType), d.apmHostSocketPath, d.dsdHostSocketPath)
+		if err != nil {
+			return nil, err
+		}
+	} else if foundMode && foundPath {
+		isValidSocket := volumeMode == string(ModeSocket) && (volumePath == d.apmHostSocketPath || volumePath == d.dsdHostSocketPath)
+		isValidDir := volumeMode == string(ModeLocal) && (volumePath == filepath.Dir(d.apmHostSocketPath) || volumePath == filepath.Dir(d.dsdHostSocketPath))
+
+		if isValidDir || isValidSocket {
+			mode = Mode(volumeMode)
+			path = volumePath
+		} else {
+			return nil, fmt.Errorf("unexpected volume attributes: permitted values are [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s]",
+				ModeLocal,
+				filepath.Dir(d.apmHostSocketPath),
+				ModeLocal,
+				filepath.Dir(d.dsdHostSocketPath),
+				ModeSocket,
+				d.apmHostSocketPath,
+				ModeSocket,
+				d.dsdHostSocketPath,
+			)
+		}
+	} else {
+		return nil, errors.New("missing property 'type' in CSI volume context")
 	}
 
 	return &DDVolumeRequest{
