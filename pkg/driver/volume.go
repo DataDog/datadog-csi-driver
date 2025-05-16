@@ -101,7 +101,16 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 			mode = Mode(volumeMode)
 			path = volumePath
 		} else {
-			return nil, errors.New("unexpected volume attributes")
+			return nil, fmt.Errorf("unexpected volume attributes: permitted values are [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s]",
+				ModeLocal,
+				filepath.Dir(d.apmHostSocketPath),
+				ModeLocal,
+				filepath.Dir(d.dsdHostSocketPath),
+				ModeSocket,
+				d.apmHostSocketPath,
+				ModeSocket,
+				d.dsdHostSocketPath,
+			)
 		}
 	} else {
 		return nil, errors.New("missing property 'type' in CSI volume context")
