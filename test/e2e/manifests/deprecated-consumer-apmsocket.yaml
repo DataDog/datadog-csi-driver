@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: deprecated-consumer-apmsocket
+spec:
+  containers:
+  - name: deprecated-consumer-apmsocket
+    image: alpine/socat
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Hello from deprecated APMSocket" | socat - UNIX-CONNECT:/apm.sock;
+          sleep 1;
+        done
+    volumeMounts:
+    - name: dd-csi-volume
+      mountPath: /apm.sock
+  volumes:
+  - name: dd-csi-volume
+    csi:
+      driver: k8s.csi.datadoghq.com
+      volumeAttributes:
+        mode: socket
+        path: /socket-dir/apm.sock
