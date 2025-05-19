@@ -5,7 +5,7 @@ CLUSTER_NAME="csi-e2e"
 HELM_RELEASE="datadog-csi"
 NAMESPACE="datadog"
 IMAGE_NAME="datadog-csi-driver:dev"
-PLATFORM="linux/amd64"
+PLATFORM="linux/$(uname -m)"
 
 # Check if the cluster already exists and delete it
 echo "🧱 [1/5] Checking if Kind cluster already exists..."
