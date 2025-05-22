@@ -45,7 +45,7 @@ publish_public_main:
     strategy: depend
   variables:
     IMG_SOURCES: $BUILD_DOCKER_REGISTRY/$PROJECTNAME:v${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
-    IMG_DESTINATIONS: $PUBLIC_IMAGE_NAME:main
+    IMG_DESTINATIONS: $PUBLIC_IMAGE_NAME:main, $PUBLIC_IMAGE_NAME:${CI_COMMIT_SHORT_SHA}
     IMG_SIGNING: "false"
 
 publish_public_tag:
