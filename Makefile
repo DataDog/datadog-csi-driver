@@ -33,7 +33,7 @@ install-kind:
 		echo "Installing kind for $(KIND_OS)-$(KIND_ARCH)..."; \
 		curl -Lo kind $(KIND_URL); \
 		chmod +x kind; \
-		sudo mv kind /usr/local/bin/; \
+		mv kind /usr/local/bin/; \
 	else \
 		echo "kind is already installed at $(KIND_CMD)."; \
 	fi
@@ -58,7 +58,7 @@ test:
 
 e2e: install-kind
 	./test/e2e/setup-env.sh
-	kubectl apply -f test/e2e/manifests
+	kubectl apply -f test/e2e/manifests -n default
 	go test -v -count=1 -tags=e2e ./test/e2e
 	./test/e2e/clean-env.sh
 

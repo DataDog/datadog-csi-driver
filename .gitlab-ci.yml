@@ -12,6 +12,7 @@ cache: &global_cache
 
 stages:
   - test
+  - e2e
   - build_image
   - release
 
@@ -21,6 +22,24 @@ tests:
   tags: ["arch:amd64"]
   script:
     - make test
+
+e2e_tests:
+  stage: e2e
+  image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_x64:v66293343-2eef00c4
+  tags:
+    - docker-in-docker:amd64
+  before_script:
+    - apt-get update && apt-get install -y bash curl
+    - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    - install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+    - kubectl version --client
+    - curl -LO https://get.helm.sh/helm-v3.14.3-linux-amd64.tar.gz
+    - tar -zxvf helm-v3.14.3-linux-amd64.tar.gz
+    - mv linux-amd64/helm /usr/local/bin/helm
+    - helm version
+  script:
+    - docker info
+    - make e2e
 
 build_image:
   stage: build_image
