@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/klog/v2"
 )
 
 type VolumeType string
@@ -27,6 +28,10 @@ const (
 
 	// DSDSocketDirectory mounts the parent directory of the dogstatsd socket
 	DSDSocketDirectory VolumeType = "DSDSocketDirectory"
+
+	// DatadogSocketsDirectory mounts the parent directory of the dogstatsd socket
+	// This option is deprecated, but kept to avoid breaking backward compatibility
+	DatadogSocketsDirectory VolumeType = "DatadogSocketsDirectory"
 )
 
 type Mode string
@@ -50,6 +55,10 @@ func getModeAndPath(volumeType VolumeType, apmHostSocketPath, dsdHostSocketPath 
 		path = dsdHostSocketPath
 		mode = ModeSocket
 	case DSDSocketDirectory:
+		path = filepath.Dir(dsdHostSocketPath)
+		mode = ModeLocal
+	case DatadogSocketsDirectory:
+		klog.Warningf("%s volume type is deprecated. Prefer using %s or %s instead.", DatadogSocketsDirectory, DSDSocketDirectory, APMSocketDirectory)
 		path = filepath.Dir(dsdHostSocketPath)
 		mode = ModeLocal
 	default:
