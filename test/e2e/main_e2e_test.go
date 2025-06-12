@@ -65,6 +65,10 @@ func TestUDSConsumerPod(t *testing.T) {
 			podName:     "deprecated-consumer-apmsocketdirectory",
 			expectedLog: "Hello from deprecated APMSocketDirectory",
 		},
+		{
+			podName:     "deprecated-consumer-datadogsocketsdirectory",
+			expectedLog: "Hello from deprecated DatadogSocketsDirectory",
+		},
 	}
 
 	t.Log("Waiting for consumer pods to be Ready...")
