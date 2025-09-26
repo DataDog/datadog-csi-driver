@@ -28,8 +28,6 @@ spec:
             driver: k8s.csi.datadoghq.com
             readOnly: true
             volumeAttributes:
-              # If your driver version doesn't support APMLibraryDirectory yet,
-              # use APMSocketDirectory instead.
               type: APMLibraryDirectory
               package: "apm-library-python"
               version: "3.14"
