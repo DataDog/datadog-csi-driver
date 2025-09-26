@@ -55,7 +55,7 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 	}
 
 	klog.Infof("Received volume request: %v", *ddVolumeRequest)
-	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
+	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path, ddVolumeRequest.volumeContext)
 	if err != nil {
 		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to perform volume mount: %v", err)

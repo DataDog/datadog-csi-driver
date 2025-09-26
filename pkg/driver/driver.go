@@ -22,6 +22,7 @@ type DatadogCSIDriver struct {
 
 	apmHostSocketPath string
 	dsdHostSocketPath string
+	apmLibraryPath    string
 
 	publishers map[publishers.PublisherKind]publishers.Publisher
 	fs         afero.Afero
@@ -34,7 +35,7 @@ func (driver *DatadogCSIDriver) Version() string {
 }
 
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, version string) (*DatadogCSIDriver, error) {
+func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, apmLibraryPath, version string) (*DatadogCSIDriver, error) {
 	fs := afero.Afero{Fs: afero.NewOsFs()}
 	mounter := mount.New("")
 
@@ -45,6 +46,7 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, version str
 
 		apmHostSocketPath: apmHostSocketPath,
 		dsdHostSocketPath: dsdHostSocketPath,
+		apmLibraryPath:    apmLibraryPath,
 
 		publishers: publishers.GetPublishers(fs, mounter),
 		fs:         fs,

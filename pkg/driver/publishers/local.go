@@ -24,7 +24,7 @@ type localPublisher struct {
 // Mount implements Publisher#Mount.
 // It mounts directory hostPath onto directory targetPath.
 // If hostPath is not found or is not a directory, it returns an error.
-func (s localPublisher) Mount(targetPath string, hostPath string) error {
+func (s localPublisher) Mount(targetPath string, hostPath string, volumeContext map[string]string) error {
 	// Check if the target path exists. Create if not present.
 	if err := createHostPath(s.fs, targetPath, false); err != nil {
 		return fmt.Errorf("failed to create required path %q: %w", targetPath, err)
