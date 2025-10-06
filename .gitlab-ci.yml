@@ -1,4 +1,6 @@
 ---
+include:
+  - local: .adms/go/gitlab.yaml
 image: registry.ddbuild.io/images/mirror/golang:1.23.4
 variables:
   PROJECTNAME: "datadog-csi-driver"

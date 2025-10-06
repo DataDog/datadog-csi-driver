@@ -4,3 +4,5 @@
 
 # All your base
 *                   @DataDog/container-platform
+
+/.adms/ @DataDog/dependency-management
