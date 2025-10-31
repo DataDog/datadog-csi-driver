@@ -130,8 +130,8 @@ trigger_internal_image_latest:
   variables:
     IMAGE_VERSION: tmpl-v1
     IMAGE_NAME: $PROJECTNAME
-    RELEASE_TAG: ${CI_COMMIT_REF_SLUG}
+    RELEASE_TAG: latest
     BUILD_TAG: ${CI_COMMIT_REF_SLUG}
-    TMPL_SRC_IMAGE: latest
+    TMPL_SRC_IMAGE: v${CI_PIPELINE_ID}-${CI_COMMIT_SHORT_SHA}
     RELEASE_STAGING: "true"
     RELEASE_PROD: "true"
