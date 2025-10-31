@@ -29,6 +29,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		*driverNameFlag,
 		*apmHostSocketPath,
 		*dsdHostSocketPath,
+		*apmLibraryPath,
 		Version,
 	)
 	if err != nil {

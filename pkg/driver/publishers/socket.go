@@ -25,7 +25,7 @@ type socketPublisher struct {
 // It verifies that hostPath is indeed a UDS socket path.
 // If it is not the case, an error is returned.
 // Else, it mounts the socket path onto targetPath
-func (s socketPublisher) Mount(targetPath string, hostPath string) error {
+func (s socketPublisher) Mount(targetPath string, hostPath string, volumeContext map[string]string) error {
 	hostPathIsSocket, err := isSocketPath(hostPath)
 
 	if err != nil {

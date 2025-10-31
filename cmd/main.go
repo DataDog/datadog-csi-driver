@@ -23,6 +23,7 @@ var (
 	endpointFlag      = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
 	dsdHostSocketPath = flag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
 	apmHostSocketPath = flag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
+	apmLibraryPath    = flag.String("apm-library-path", "/opt/datadog-packages", "APM library path path")
 )
 
 // run creates and runs the metrics server and the csi driver grpc server

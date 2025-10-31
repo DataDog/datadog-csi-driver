@@ -13,7 +13,7 @@ import (
 // Publisher defines logic for mounting and unmounting volumes.
 type Publisher interface {
 	// Mount mounts the hostPath at targetPath
-	Mount(targetPath string, hostPath string) error
+	Mount(targetPath string, hostPath string, volumeContext map[string]string) error
 }
 
 // PublisherKind represents the type of the publisher
@@ -24,11 +24,13 @@ const (
 	Socket PublisherKind = "socket"
 	// Local is the publichser kind that allows mounting local directories.
 	Local = "local"
+	OCI   = "oci"
 )
 
 func GetPublishers(fs afero.Afero, mounter mount.Interface) map[PublisherKind]Publisher {
 	return map[PublisherKind]Publisher{
 		Socket: newSocketPublisher(fs, mounter),
 		Local:  newLocalPublisher(fs, mounter),
+		OCI:    newOCIPublisher(fs, mounter),
 	}
 }

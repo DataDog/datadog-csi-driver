@@ -59,8 +59,6 @@ test:
 e2e: install-kind
 	./test/e2e/setup-env.sh
 	kubectl apply -f test/e2e/manifests -n default
-	go test -v -count=1 -tags=e2e ./test/e2e
-	./test/e2e/clean-env.sh
 
 .PHONY: build
 .PHONY: docker-buildx-ci

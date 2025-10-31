@@ -32,6 +32,8 @@ const (
 	// DatadogSocketsDirectory mounts the parent directory of the dogstatsd socket
 	// This option is deprecated, but kept to avoid breaking backward compatibility
 	DatadogSocketsDirectory VolumeType = "DatadogSocketsDirectory"
+
+	APMLibraryDirectory VolumeType = "APMLibraryDirectory"
 )
 
 type Mode string
@@ -41,13 +43,17 @@ const (
 	ModeSocket Mode = "socket"
 	// ModeLocal is the local mode, equivalent to Directory hostpath volumes
 	ModeLocal = "local"
+	ModeOCI   = "oci"
 )
 
-func getModeAndPath(volumeType VolumeType, apmHostSocketPath, dsdHostSocketPath string) (mode Mode, path string, err error) {
+func getModeAndPath(volumeType VolumeType, apmHostSocketPath, dsdHostSocketPath, apmLibraryPath string) (mode Mode, path string, err error) {
 	switch volumeType {
 	case APMSocket:
 		path = apmHostSocketPath
 		mode = ModeSocket
+	case APMLibraryDirectory:
+		path = filepath.Dir(apmLibraryPath)
+		mode = ModeOCI
 	case APMSocketDirectory:
 		path = filepath.Dir(apmHostSocketPath)
 		mode = ModeLocal
@@ -70,11 +76,12 @@ func getModeAndPath(volumeType VolumeType, apmHostSocketPath, dsdHostSocketPath 
 
 // DDVolumeRequest encapsulates the properties of a request for datadog CSI volume
 type DDVolumeRequest struct {
-	volumeId   string
-	targetpath string
-	volumeType VolumeType
-	mode       Mode
-	path       string
+	volumeId      string
+	targetpath    string
+	volumeType    VolumeType
+	mode          Mode
+	path          string
+	volumeContext map[string]string
 }
 
 // NewDDVolumeRequest builds a DDVolumeRequest object based on csi node publish volume request
@@ -98,19 +105,19 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 	if foundType {
 		// Using new schema
 		var err error
-		mode, path, err = getModeAndPath(VolumeType(volumeType), d.apmHostSocketPath, d.dsdHostSocketPath)
+		mode, path, err = getModeAndPath(VolumeType(volumeType), d.apmHostSocketPath, d.dsdHostSocketPath, d.apmLibraryPath)
 		if err != nil {
 			return nil, err
 		}
 	} else if foundMode && foundPath {
 		isValidSocket := volumeMode == string(ModeSocket) && (volumePath == d.apmHostSocketPath || volumePath == d.dsdHostSocketPath)
-		isValidDir := volumeMode == string(ModeLocal) && (volumePath == filepath.Dir(d.apmHostSocketPath) || volumePath == filepath.Dir(d.dsdHostSocketPath))
+		isValidDir := volumeMode == string(ModeLocal) && (volumePath == filepath.Dir(d.apmHostSocketPath) || volumePath == filepath.Dir(d.dsdHostSocketPath) || volumePath == filepath.Dir(d.apmLibraryPath))
 
 		if isValidDir || isValidSocket {
 			mode = Mode(volumeMode)
 			path = volumePath
 		} else {
-			return nil, fmt.Errorf("unexpected volume attributes: permitted values are [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s]",
+			return nil, fmt.Errorf("unexpected volume attributes: permitted values are [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s], [mode:%s path:%s]",
 				ModeLocal,
 				filepath.Dir(d.apmHostSocketPath),
 				ModeLocal,
@@ -119,6 +126,8 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 				d.apmHostSocketPath,
 				ModeSocket,
 				d.dsdHostSocketPath,
+				ModeOCI,
+				d.apmLibraryPath,
 			)
 		}
 	} else {
@@ -126,10 +135,11 @@ func (d *DatadogCSIDriver) DDVolumeRequest(req *csi.NodePublishVolumeRequest) (*
 	}
 
 	return &DDVolumeRequest{
-		volumeId:   volumeId,
-		targetpath: targetPath,
-		volumeType: VolumeType(volumeType),
-		mode:       mode,
-		path:       path,
+		volumeId:      volumeId,
+		targetpath:    targetPath,
+		volumeType:    VolumeType(volumeType),
+		mode:          mode,
+		path:          path,
+		volumeContext: req.VolumeContext,
 	}, nil
 }

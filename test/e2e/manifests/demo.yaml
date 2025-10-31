@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-apm-lib
+  labels:
+    app: demo-apm-lib
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-apm-lib
+  template:
+    metadata:
+      labels:
+        app: demo-apm-lib
+    spec:
+      containers:
+        - name: app
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "250m"
+            limits:
+              memory: "128Mi"
+              cpu: "500m"
+          image: busybox:1.36
+          command: ["sh", "-c", "sleep 3600"]
+          volumeMounts:
+            - name: "apm-library-python"
+              mountPath: /opt/datadog-packages/apm-library-python
+              readOnly: true
+      volumes:
+        - name: "apm-library-python"
+          csi:
+            driver: k8s.csi.datadoghq.com
+            readOnly: true
+            volumeAttributes:
+              type: APMLibraryDirectory
+              package: "apm-library-python"
+              version: "3.14"
