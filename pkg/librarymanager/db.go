@@ -29,6 +29,22 @@ type linkedVolume struct{}
 type linkedLibrary struct{}
 
 // Database is a wrapper around bbolt with business logic for the library manager.
+//
+// # Transaction Consistency Guarantees
+//
+// bbolt provides serializable isolation, the highest level of transaction isolation:
+//   - Write transactions are mutually exclusive (only one can run at a time)
+//   - Read transactions see a consistent snapshot of the database at the time they started
+//   - All operations within a single transaction are atomic (all-or-nothing)
+//
+// The defer tx.Rollback() pattern is safe: if Commit() was already called, Rollback() is a no-op.
+//
+// # External Locking Requirements
+//
+// While individual database transactions are atomic, operations that span multiple transactions
+// or combine database operations with filesystem operations (e.g., LinkVolume + store.Add)
+// require external synchronization. The LibraryManager uses a Locker to coordinate these
+// compound operations on a per-library basis.
 type Database struct {
 	bbolt *bbolt.DB
 }
