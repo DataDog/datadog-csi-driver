@@ -28,11 +28,17 @@ const (
 // LibraryManager is a high level object to manage fetching libraries for volumes. It will download, extract, store, and
 // track libraries and how they map to a volume.
 type LibraryManager struct {
+	// downloader is used to download container images.
 	downloader *Downloader
-	cache      *ImageCache
-	store      *Store
-	db         *Database
-	locker     *Locker
+	// cache is used to cache container image digests.
+	cache *ImageCache
+	// store is used to store libraries on disk.
+	store *Store
+	// db is used to track library and volume mappings.
+	db *Database
+	// locker is used to synchronize access to the library manager.
+	locker *Locker
+	// scratchDir is the directory used for scratch download space for libraries.
 	scratchDir string
 }
 
@@ -73,7 +79,7 @@ func NewLibraryManagerWithDownloader(basePath string, d *Downloader) (*LibraryMa
 		return nil, fmt.Errorf("could not create database: %w", err)
 	}
 
-	// Retrun library manager.
+	// Return library manager.
 	return &LibraryManager{
 		downloader: d,
 		cache:      NewImageCache(d, DefaultImageCacheTTL),
@@ -89,7 +95,7 @@ func (lm *LibraryManager) Stop() error {
 	return lm.db.Close()
 }
 
-// GetLibraryForVolume fetches the remote library if it doesn't exist, records it's usage, and returns the path on disk
+// GetLibraryForVolume fetches the remote library if it doesn't exist, records its usage, and returns the path on disk
 // that can be mounted for the volume.
 func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID string, lib *Library) (string, error) {
 	// Validate the input.
@@ -128,7 +134,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// Otherwise, create a scratch space.
 	scratch, err := os.MkdirTemp(lm.scratchDir, "datadog-csi-driver-*")
 	if err != nil {
-		return "", fmt.Errorf("")
+		return "", fmt.Errorf("could not create scratch directory: %w", err)
 	}
 	defer os.RemoveAll(scratch)
 
@@ -143,7 +149,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 }
 
 // RemoveVolume removes the link in the database for the volume. If there are no more uses of the library, it is also
-// removed.
+// removed from disk.
 func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) error {
 	// Look up the linked library.
 	libraryID, err := lm.db.GetLibraryForVolume(volumeID)

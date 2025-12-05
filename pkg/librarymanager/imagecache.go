@@ -7,8 +7,11 @@ package librarymanager
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/google/go-containerregistry/pkg/name"
 )
 
 // ImageCache provides an in memory cache of container image digests so we don't have to resolve a container tag to
@@ -30,8 +33,26 @@ func NewImageCache(d *Downloader, ttl time.Duration) *ImageCache {
 	}
 }
 
-// FetchDigest will optionally return a digest for an image out of cache or resolve a fresh digest.
+// FetchDigest returns the sha256 digest for a container image, using the cache when possible.
+//
+// The image parameter must be a valid container image reference as accepted by crane
+// (https://pkg.go.dev/github.com/google/go-containerregistry/pkg/crane).
+// Examples:
+//   - "gcr.io/datadoghq/dd-lib-java-init:v1.2.3"
+//   - "gcr.io/datadoghq/dd-lib-java-init@sha256:abc123..."
+//   - "nginx:latest" (defaults to docker.io registry)
+//
+// If the image already contains a digest (@sha256:...), this function will still resolve
+// the full digest from the registry to ensure it exists and is valid.
+//
+// If pull is true, the cache is bypassed and a fresh digest is always fetched from the registry.
+// If pull is false, the cache is checked first and a remote call is only made on cache miss.
 func (ic *ImageCache) FetchDigest(ctx context.Context, image string, pull bool) (string, error) {
+	// Validate image format using crane's reference parser.
+	if _, err := name.ParseReference(image); err != nil {
+		return "", fmt.Errorf("invalid image reference %q: %w", image, err)
+	}
+
 	// If pull is false, then we should check the cache for the image first.
 	if !pull {
 		cached := ic.digestFromCache(image)

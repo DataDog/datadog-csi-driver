@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	// DatabaseFileName is the name of the database file created by bbbolt.
+	// DatabaseFileName is the name of the database file created by bbolt.
 	DatabaseFileName = "datadog-csi-driver.db"
 	// LibraryMappingBucket is the name of the bucket to map libraries. Conceptually, the key structure is as follows:
-	//     /librarary-mappings/{{ library_id }}/{{ volume_id }}
+	//     /library-mappings/{{ library_id }}/{{ volume_id }}
 	LibraryMappingBucket = "library-mappings"
 	// VolumeMappingBucket is the bucket to map volumes. Conceptually, the key structure is as follows:
 	//     /volume-mappings/{{ volume_id }}/{{ library_id }}

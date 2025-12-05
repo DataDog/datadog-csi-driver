@@ -22,28 +22,28 @@ func TestExtract(t *testing.T) {
 		source   string
 		expected []string
 	}{
-		"sameple archive extracts expected files with source": {
+		"sample archive extracts expected files with source": {
 			archive: "testdata/rootfs.tar",
 			source:  "/contents/datadog-init/package",
 			expected: []string{
 				"library.txt",
 			},
 		},
-		"sameple archive extracts expected files with relative source": {
+		"sample archive extracts expected files with relative source": {
 			archive: "testdata/rootfs.tar",
 			source:  "contents/datadog-init/package",
 			expected: []string{
 				"library.txt",
 			},
 		},
-		"sameple archive extracts expected files when it ends in a slash": {
+		"sample archive extracts expected files when it ends in a slash": {
 			archive: "testdata/rootfs.tar",
 			source:  "/contents/datadog-init/package/",
 			expected: []string{
 				"library.txt",
 			},
 		},
-		"sameple archive extracts all files with root": {
+		"sample archive extracts all files with root": {
 			archive: "testdata/rootfs.tar",
 			source:  "/",
 			expected: []string{
