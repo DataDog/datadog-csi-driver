@@ -292,39 +292,3 @@ func (db *Database) GetLibraryForVolume(volumeID string) (string, error) {
 
 	return string(key), nil
 }
-
-// GetVolumesForLibrary returns the list of volume IDs associated with a given library.
-func (db *Database) GetVolumesForLibrary(libraryID string) ([]string, error) {
-	// Validate input.
-	if libraryID == "" {
-		return nil, fmt.Errorf("library ID cannot be blank")
-	}
-
-	// Start a transaction.
-	tx, err := db.bbolt.Begin(false)
-	if err != nil {
-		return nil, fmt.Errorf("could not start transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	// Get the bucket for library mappings. If it doesn't exist, we have a system level issue.
-	root := tx.Bucket([]byte(LibraryMappingBucket))
-	if root == nil {
-		return nil, fmt.Errorf("library mapping bucket does not exist")
-	}
-
-	// Get the bucket for the library. If it doesn't exist, then there are no linked volumes for the library.
-	bkt := root.Bucket([]byte(libraryID))
-	if bkt == nil {
-		return nil, nil
-	}
-
-	// List volumes linked to the library.
-	volumes := []string{}
-	bkt.ForEach(func(k, v []byte) error {
-		volumes = append(volumes, string(k))
-		return nil
-	})
-
-	return volumes, nil
-}

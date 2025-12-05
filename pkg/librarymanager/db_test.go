@@ -30,9 +30,9 @@ func TestDatabase(t *testing.T) {
 
 	// Ensure there are no libraries linked when none have been linked.
 	libraryID := "test-library-id"
-	volumes, err := db.GetVolumesForLibrary(libraryID)
+	count, err := db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.Empty(t, volumes, "there should be no volumes linked")
+	require.Equal(t, 0, count, "there should be no volumes linked")
 
 	// Ensure that an unlink does not produce an error if it has not been linked.
 	err = db.UnlinkVolume(libraryID, volumeID)
@@ -44,9 +44,9 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	volumes, err = db.GetVolumesForLibrary(libraryID)
+	count, err = db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{volumeID}, volumes, "there should be a volume linked")
+	require.Equal(t, 1, count, "there should be one volume linked")
 
 	// Ensure a second call to link the same volume does nothing
 	err = db.LinkVolume(libraryID, volumeID)
@@ -54,9 +54,9 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	volumes, err = db.GetVolumesForLibrary(libraryID)
+	count, err = db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{volumeID}, volumes, "there should be a volume linked")
+	require.Equal(t, 1, count, "there should still be one volume linked")
 
 	// Ensure a second linked volume shows both.
 	secondVolumeID := "test-volume-id-two"
@@ -65,9 +65,9 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	volumes, err = db.GetVolumesForLibrary(libraryID)
+	count, err = db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{volumeID, secondVolumeID}, volumes, "there should be both volumes linked")
+	require.Equal(t, 2, count, "there should be two volumes linked")
 
 	// Ensure an unlinked volume only has one volume linked.
 	err = db.UnlinkVolume(libraryID, secondVolumeID)
@@ -75,16 +75,16 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	volumes, err = db.GetVolumesForLibrary(libraryID)
+	count, err = db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{volumeID}, volumes, "there should be a volume linked")
+	require.Equal(t, 1, count, "there should be one volume linked")
 
 	// Ensure all unlinks completely zeros out the count.
 	err = db.UnlinkVolume(libraryID, volumeID)
 	require.NoError(t, err)
-	volumes, err = db.GetVolumesForLibrary(libraryID)
+	count, err = db.GetVolumeCount(libraryID)
 	require.NoError(t, err)
-	require.Empty(t, volumes, "there should be no volumes linked")
+	require.Equal(t, 0, count, "there should be no volumes linked")
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Empty(t, lib, "there should be no libs linked")
