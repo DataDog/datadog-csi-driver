@@ -7,55 +7,64 @@ package publishers
 
 import (
 	"fmt"
-	"os"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"k8s.io/klog"
 	"k8s.io/utils/mount"
 )
 
+const modeSocket = "socket"
+
+// socketPublisher handles socket mounts using the "type" schema (APMSocket, DSDSocket).
 type socketPublisher struct {
-	fs      afero.Afero
-	mounter mount.Interface
+	fs            afero.Afero
+	mounter       mount.Interface
+	apmSocketPath string
+	dsdSocketPath string
 }
 
-// Mount implements Publisher#Mount.
-// It verifies that hostPath is indeed a UDS socket path.
-// If it is not the case, an error is returned.
-// Else, it mounts the socket path onto targetPath
-func (s socketPublisher) Mount(targetPath string, hostPath string) error {
+func (s socketPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
+	return false, nil
+}
+
+func (s socketPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
+	return false, nil
+}
+
+// Publish implements Publisher#Publish for the "type" schema.
+// It handles APMSocket and DSDSocket volume types.
+func (s socketPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+	volumeCtx := req.GetVolumeContext()
+
+	// Resolve the type to hostPath
+	var hostPath string
+	switch VolumeType(volumeCtx["type"]) {
+	case APMSocket:
+		hostPath = s.apmSocketPath
+	case DSDSocket:
+		hostPath = s.dsdSocketPath
+	default:
+		return false, nil
+	}
+
+	targetPath := req.GetTargetPath()
+
+	// Validate that hostPath is a socket
 	hostPathIsSocket, err := isSocketPath(hostPath)
-
 	if err != nil {
-		return fmt.Errorf("failed to check if %q is a socket path: %v", hostPath, err)
+		return true, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
 	}
-
 	if !hostPathIsSocket {
-		return fmt.Errorf("socket not found at %q", hostPath)
+		return true, fmt.Errorf("socket not found at %q", hostPath)
 	}
 
-	// Check if the target path exists. Create if not present.
-	if err := createHostPath(s.fs, targetPath, true); err != nil {
-		return fmt.Errorf("failed to create required path %q: %w", targetPath, err)
-	}
-
-	notMnt, err := s.mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil && !os.IsNotExist(err) {
-		return status.Errorf(codes.Internal, "Error checking mount point: %v", err)
-	}
-
-	if notMnt {
-		if err := s.mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
-			klog.Errorf("Failed to mount %q to %q: %v", hostPath, targetPath, err)
-			return status.Errorf(codes.Internal, "Failed to mount: %v", err)
-		}
-	}
-
-	return nil
+	return true, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
 }
 
-func newSocketPublisher(fs afero.Afero, mounter mount.Interface) Publisher {
-	return socketPublisher{fs: fs, mounter: mounter}
+func (s socketPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
+	return false, nil // Handled by unmountPublisher
+}
+
+func newSocketPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {
+	return socketPublisher{fs: fs, mounter: mounter, apmSocketPath: apmSocketPath, dsdSocketPath: dsdSocketPath}
 }

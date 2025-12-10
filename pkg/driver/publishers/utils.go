@@ -63,3 +63,13 @@ func isSocketPath(path string) (bool, error) {
 	}
 	return fileInfo.Mode().Type() == fs.ModeSocket, nil
 }
+
+// isAllowedPath checks if a path is in the allowed list.
+func isAllowedPath(path string, allowedPaths []string) bool {
+	for _, allowed := range allowedPaths {
+		if path == allowed {
+			return true
+		}
+	}
+	return false
+}
