@@ -21,46 +21,48 @@ type socketPublisher struct {
 	dsdSocketPath string
 }
 
-func (s socketPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s socketPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s socketPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s socketPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
 // Publish implements Publisher#Publish for the "type" schema.
 // It handles APMSocket and DSDSocket volume types.
-func (s socketPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+func (s socketPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 
 	// Resolve the type to hostPath
 	var hostPath string
-	switch VolumeType(volumeCtx["type"]) {
+	volumeType := VolumeType(volumeCtx["type"])
+	switch volumeType {
 	case APMSocket:
 		hostPath = s.apmSocketPath
 	case DSDSocket:
 		hostPath = s.dsdSocketPath
 	default:
-		return false, nil
+		return nil, nil
 	}
 
+	resp := &PublisherResponse{VolumeType: volumeType, VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
 
 	// Validate that hostPath is a socket
 	hostPathIsSocket, err := isSocketPath(s.fs, hostPath)
 	if err != nil {
-		return true, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
+		return resp, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
 	}
 	if !hostPathIsSocket {
-		return true, fmt.Errorf("socket not found at %q", hostPath)
+		return resp, fmt.Errorf("socket not found at %q", hostPath)
 	}
 
-	return true, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
 }
 
-func (s socketPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return false, nil // Handled by unmountPublisher
+func (s socketPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil // Handled by unmountPublisher
 }
 
 func newSocketPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {

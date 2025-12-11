@@ -11,17 +11,27 @@ import (
 	"k8s.io/utils/mount"
 )
 
+// PublisherResponse contains metadata about a handled request, used for metrics.
+// A nil response means the publisher does not support the request.
+type PublisherResponse struct {
+	VolumeType VolumeType
+	VolumePath string
+}
+
 // Publisher defines logic for staging, unstaging, publishing and unpublishing volumes.
-// A publisher returns true if it supports the operation for the given request, false otherwise.
+// Each method returns:
+//   - (*PublisherResponse, nil) if the operation succeeded
+//   - (*PublisherResponse, error) if the operation failed
+//   - (nil, nil) if the publisher does not support this request
 type Publisher interface {
 	// Stage stages the volume
-	Stage(req *csi.NodeStageVolumeRequest) (bool, error)
+	Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error)
 	// Unstage unstages the volume
-	Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error)
+	Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error)
 	// Publish publishes the volume
-	Publish(req *csi.NodePublishVolumeRequest) (bool, error)
+	Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error)
 	// Unpublish unpublishes the volume
-	Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error)
+	Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error)
 }
 
 // GetPublishers returns a chain of publishers for handling CSI volume operations.

@@ -16,20 +16,20 @@ type ssiPublisher struct {
 	mounter mount.Interface
 }
 
-func (s ssiPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s ssiPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s ssiPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s ssiPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s ssiPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
-	return false, nil
+func (s ssiPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s ssiPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return false, nil
+func (s ssiPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
 func newSSIPublisher(fs afero.Afero, mounter mount.Interface) Publisher {

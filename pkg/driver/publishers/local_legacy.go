@@ -27,45 +27,46 @@ type localLegacyPublisher struct {
 	dsdSocketPath string
 }
 
-func (s localLegacyPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s localLegacyPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s localLegacyPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s localLegacyPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
 // Publish implements Publisher#Publish for the deprecated mode/path schema.
-func (s localLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+func (s localLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 
 	// Only handle legacy schema (mode/path without type)
 	if _, hasType := volumeCtx["type"]; hasType {
-		return false, nil
+		return nil, nil
 	}
 
 	mode, hasMode := volumeCtx["mode"]
 	hostPath, hasPath := volumeCtx["path"]
 
 	if !hasMode || !hasPath || mode != modeLocal {
-		return false, nil
+		return nil, nil
 	}
 
 	klog.Warningf("Using deprecated mode/path schema. Please migrate to using 'type: APMSocketDirectory' or 'type: DSDSocketDirectory' instead.")
 
+	resp := &PublisherResponse{VolumeType: VolumeType(mode), VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
 
 	// Validate that hostPath is in the allowed list (parent directories of the sockets)
 	allowedPaths := []string{filepath.Dir(s.apmSocketPath), filepath.Dir(s.dsdSocketPath)}
 	if !isAllowedPath(hostPath, allowedPaths) {
-		return true, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
+		return resp, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
 	}
 
-	return true, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
 }
 
-func (s localLegacyPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return false, nil // Handled by unmountPublisher
+func (s localLegacyPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil // Handled by unmountPublisher
 }
 
 func newLocalLegacyPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {

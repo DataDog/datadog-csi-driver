@@ -26,54 +26,55 @@ type socketLegacyPublisher struct {
 	dsdSocketPath string
 }
 
-func (s socketLegacyPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s socketLegacyPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s socketLegacyPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s socketLegacyPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
 // Publish implements Publisher#Publish for the deprecated mode/path schema.
-func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 
 	// Only handle legacy schema (mode/path without type)
 	if _, hasType := volumeCtx["type"]; hasType {
-		return false, nil
+		return nil, nil
 	}
 
 	mode, hasMode := volumeCtx["mode"]
 	hostPath, hasPath := volumeCtx["path"]
 
 	if !hasMode || !hasPath || mode != modeSocket {
-		return false, nil
+		return nil, nil
 	}
 
 	klog.Warningf("Using deprecated mode/path schema. Please migrate to using 'type: APMSocket' or 'type: DSDSocket' instead.")
 
+	resp := &PublisherResponse{VolumeType: VolumeType(mode), VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
 
 	// Validate that hostPath is in the allowed list
 	allowedPaths := []string{s.apmSocketPath, s.dsdSocketPath}
 	if !isAllowedPath(hostPath, allowedPaths) {
-		return true, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
+		return resp, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
 	}
 
 	// Validate that hostPath is a socket
 	hostPathIsSocket, err := isSocketPath(s.fs, hostPath)
 	if err != nil {
-		return true, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
+		return resp, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
 	}
 	if !hostPathIsSocket {
-		return true, fmt.Errorf("socket not found at %q", hostPath)
+		return resp, fmt.Errorf("socket not found at %q", hostPath)
 	}
 
-	return true, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
 }
 
-func (s socketLegacyPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return false, nil // Handled by unmountPublisher
+func (s socketLegacyPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil // Handled by unmountPublisher
 }
 
 func newSocketLegacyPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {

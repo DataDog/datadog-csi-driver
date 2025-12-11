@@ -23,22 +23,23 @@ type localPublisher struct {
 	dsdSocketPath string
 }
 
-func (s localPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s localPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s localPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s localPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
 // Publish implements Publisher#Publish for the "type" schema.
 // It handles APMSocketDirectory, DSDSocketDirectory, and DatadogSocketsDirectory volume types.
-func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 
 	// Resolve the type to hostPath (parent directory of the socket)
 	var hostPath string
-	switch VolumeType(volumeCtx["type"]) {
+	volumeType := VolumeType(volumeCtx["type"])
+	switch volumeType {
 	case APMSocketDirectory:
 		hostPath = filepath.Dir(s.apmSocketPath)
 	case DSDSocketDirectory:
@@ -48,16 +49,17 @@ func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error)
 			DatadogSocketsDirectory, DSDSocketDirectory, APMSocketDirectory)
 		hostPath = filepath.Dir(s.dsdSocketPath)
 	default:
-		return false, nil
+		return nil, nil
 	}
 
+	resp := &PublisherResponse{VolumeType: volumeType, VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
 
-	return true, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
 }
 
-func (s localPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return false, nil // Handled by unmountPublisher
+func (s localPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil // Handled by unmountPublisher
 }
 
 func newLocalPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {

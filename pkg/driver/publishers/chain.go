@@ -11,61 +11,61 @@ import (
 )
 
 // chainPublisher is a publisher that chains multiple publishers together.
-// It stops at the first publisher that returns true.
+// It stops at the first publisher that returns a non-nil response.
 type chainPublisher struct {
 	publishers []Publisher
 }
 
-func (s chainPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
+func (s chainPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
-		supported, err := publisher.Stage(req)
+		resp, err := publisher.Stage(req)
 		if err != nil {
 			klog.Infof("failed to stage volume with publisher %T: %v", publisher, err)
 		}
-		if supported {
-			return supported, err
+		if resp != nil {
+			return resp, err
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
-func (s chainPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
+func (s chainPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
-		supported, err := publisher.Unstage(req)
+		resp, err := publisher.Unstage(req)
 		if err != nil {
 			klog.Infof("failed to unstage volume with publisher %T: %v", publisher, err)
 		}
-		if supported {
-			return supported, err
+		if resp != nil {
+			return resp, err
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
-func (s chainPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
+func (s chainPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
-		supported, err := publisher.Publish(req)
+		resp, err := publisher.Publish(req)
 		if err != nil {
 			klog.Infof("failed to publish volume with publisher %T: %v", publisher, err)
 		}
-		if supported {
-			return supported, err
+		if resp != nil {
+			return resp, err
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
-func (s chainPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
+func (s chainPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
-		supported, err := publisher.Unpublish(req)
+		resp, err := publisher.Unpublish(req)
 		if err != nil {
 			klog.Infof("failed to unpublish volume with publisher %T: %v", publisher, err)
 		}
-		if supported {
-			return supported, err
+		if resp != nil {
+			return resp, err
 		}
 	}
-	return false, nil
+	return nil, nil
 }
 
 func newChainPublisher(publishers ...Publisher) Publisher {

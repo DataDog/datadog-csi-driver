@@ -14,30 +14,24 @@ import (
 
 func TestLocalLegacyPublisher_Publish_ModeSelection(t *testing.T) {
 	// These tests verify the mode selection logic only.
-	// We only test cases that return (false, nil) before calling bindMount.
+	// We only test cases that return (nil, nil) before calling bindMount.
 	tests := map[string]struct {
-		volumeContext   map[string]string
-		expectSupported bool
+		volumeContext map[string]string
 	}{
 		"socket mode is not supported": {
-			volumeContext:   map[string]string{"mode": "socket", "path": "/some/path"},
-			expectSupported: false,
+			volumeContext: map[string]string{"mode": "socket", "path": "/some/path"},
 		},
 		"type schema is not supported (handled by new publishers)": {
-			volumeContext:   map[string]string{"type": "APMSocketDirectory"},
-			expectSupported: false,
+			volumeContext: map[string]string{"type": "APMSocketDirectory"},
 		},
 		"mode without path is not supported": {
-			volumeContext:   map[string]string{"mode": "local"},
-			expectSupported: false,
+			volumeContext: map[string]string{"mode": "local"},
 		},
 		"path without mode is not supported": {
-			volumeContext:   map[string]string{"path": "/some/path"},
-			expectSupported: false,
+			volumeContext: map[string]string{"path": "/some/path"},
 		},
 		"empty context is not supported": {
-			volumeContext:   map[string]string{},
-			expectSupported: false,
+			volumeContext: map[string]string{},
 		},
 	}
 
@@ -51,8 +45,8 @@ func TestLocalLegacyPublisher_Publish_ModeSelection(t *testing.T) {
 				VolumeContext: tc.volumeContext,
 			}
 
-			supported, err := publisher.Publish(req)
-			assert.Equal(t, tc.expectSupported, supported)
+			resp, err := publisher.Publish(req)
+			assert.Nil(t, resp)
 			assert.NoError(t, err)
 		})
 	}
@@ -88,8 +82,8 @@ func TestLocalLegacyPublisher_Publish_PathValidation(t *testing.T) {
 				VolumeContext: map[string]string{"mode": "local", "path": tc.path},
 			}
 
-			supported, err := publisher.Publish(req)
-			assert.True(t, supported, "local mode should be supported")
+			resp, err := publisher.Publish(req)
+			assert.NotNil(t, resp, "local mode should be supported")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "not allowed")
 		})
@@ -98,14 +92,14 @@ func TestLocalLegacyPublisher_Publish_PathValidation(t *testing.T) {
 
 func TestLocalLegacyPublisher_Stage_NotSupported(t *testing.T) {
 	publisher := localLegacyPublisher{}
-	supported, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
-	assert.False(t, supported)
+	resp, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
+	assert.Nil(t, resp)
 	assert.NoError(t, err)
 }
 
 func TestLocalLegacyPublisher_Unstage_NotSupported(t *testing.T) {
 	publisher := localLegacyPublisher{}
-	supported, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
-	assert.False(t, supported)
+	resp, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
+	assert.Nil(t, resp)
 	assert.NoError(t, err)
 }

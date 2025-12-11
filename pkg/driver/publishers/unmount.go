@@ -18,20 +18,21 @@ type unmountPublisher struct {
 	mounter mount.Interface
 }
 
-func (s unmountPublisher) Stage(req *csi.NodeStageVolumeRequest) (bool, error) {
-	return false, nil
+func (s unmountPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s unmountPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (bool, error) {
-	return false, nil
+func (s unmountPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s unmountPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error) {
-	return false, nil
+func (s unmountPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil
 }
 
-func (s unmountPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (bool, error) {
-	return true, bindUnmount(s.mounter, req.GetTargetPath())
+func (s unmountPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	// Unpublish doesn't have VolumeContext, so we return an empty response
+	return &PublisherResponse{}, bindUnmount(s.mounter, req.GetTargetPath())
 }
 
 func newUnmountPublisher(mounter mount.Interface) Publisher {

@@ -14,30 +14,24 @@ import (
 
 func TestSocketLegacyPublisher_Publish_ModeSelection(t *testing.T) {
 	// These tests verify the mode selection logic only.
-	// We only test cases that return (false, nil) before calling bindMount.
+	// We only test cases that return (nil, nil) before calling bindMount.
 	tests := map[string]struct {
-		volumeContext   map[string]string
-		expectSupported bool
+		volumeContext map[string]string
 	}{
 		"local mode is not supported": {
-			volumeContext:   map[string]string{"mode": "local", "path": "/some/path"},
-			expectSupported: false,
+			volumeContext: map[string]string{"mode": "local", "path": "/some/path"},
 		},
 		"type schema is not supported (handled by new publishers)": {
-			volumeContext:   map[string]string{"type": "APMSocket"},
-			expectSupported: false,
+			volumeContext: map[string]string{"type": "APMSocket"},
 		},
 		"mode without path is not supported": {
-			volumeContext:   map[string]string{"mode": "socket"},
-			expectSupported: false,
+			volumeContext: map[string]string{"mode": "socket"},
 		},
 		"path without mode is not supported": {
-			volumeContext:   map[string]string{"path": "/some/path"},
-			expectSupported: false,
+			volumeContext: map[string]string{"path": "/some/path"},
 		},
 		"empty context is not supported": {
-			volumeContext:   map[string]string{},
-			expectSupported: false,
+			volumeContext: map[string]string{},
 		},
 	}
 
@@ -51,8 +45,8 @@ func TestSocketLegacyPublisher_Publish_ModeSelection(t *testing.T) {
 				VolumeContext: tc.volumeContext,
 			}
 
-			supported, err := publisher.Publish(req)
-			assert.Equal(t, tc.expectSupported, supported)
+			resp, err := publisher.Publish(req)
+			assert.Nil(t, resp)
 			assert.NoError(t, err)
 		})
 	}
@@ -86,8 +80,8 @@ func TestSocketLegacyPublisher_Publish_PathValidation(t *testing.T) {
 				VolumeContext: map[string]string{"mode": "socket", "path": tc.path},
 			}
 
-			supported, err := publisher.Publish(req)
-			assert.True(t, supported, "socket mode should be supported")
+			resp, err := publisher.Publish(req)
+			assert.NotNil(t, resp, "socket mode should be supported")
 			assert.Error(t, err)
 			assert.Contains(t, err.Error(), "not allowed")
 		})
@@ -96,21 +90,21 @@ func TestSocketLegacyPublisher_Publish_PathValidation(t *testing.T) {
 
 func TestSocketLegacyPublisher_Stage_NotSupported(t *testing.T) {
 	publisher := socketLegacyPublisher{}
-	supported, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
-	assert.False(t, supported)
+	resp, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
+	assert.Nil(t, resp)
 	assert.NoError(t, err)
 }
 
 func TestSocketLegacyPublisher_Unstage_NotSupported(t *testing.T) {
 	publisher := socketLegacyPublisher{}
-	supported, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
-	assert.False(t, supported)
+	resp, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
+	assert.Nil(t, resp)
 	assert.NoError(t, err)
 }
 
-func TestSocketLegacyPublisher_Unpublish_DelegatesToLocal(t *testing.T) {
+func TestSocketLegacyPublisher_Unpublish_DelegatesToUnmount(t *testing.T) {
 	publisher := socketLegacyPublisher{}
-	supported, err := publisher.Unpublish(&csi.NodeUnpublishVolumeRequest{})
-	assert.False(t, supported, "socket legacy should delegate Unpublish to local legacy")
+	resp, err := publisher.Unpublish(&csi.NodeUnpublishVolumeRequest{})
+	assert.Nil(t, resp, "socket legacy should delegate Unpublish to unmountPublisher")
 	assert.NoError(t, err)
 }
