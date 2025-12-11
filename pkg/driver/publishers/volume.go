@@ -19,4 +19,6 @@ const (
 	DSDSocketDirectory VolumeType = "DSDSocketDirectory"
 	// DatadogSocketsDirectory is deprecated, use DSDSocketDirectory instead
 	DatadogSocketsDirectory VolumeType = "DatadogSocketsDirectory"
+	// DatadogLibrary mounts a Datadog instrumentation library from an OCI image
+	DatadogLibrary VolumeType = "DatadogLibrary"
 )

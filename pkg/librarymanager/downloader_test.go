@@ -12,6 +12,8 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,23 +87,14 @@ func (lr *LocalRegistry) GetRoundTripper(t *testing.T) http.RoundTripper {
 func TestDownload(t *testing.T) {
 	tests := map[string]struct {
 		imagePath      string
-		source         string
-		expectedFiles  []string
+		checkFiles     []string // files that should exist after download (relative to extract root)
 		expectedDigest string
 	}{
 		"test image can be downloaded": {
 			imagePath: "testdata/image.tar",
-			source:    "/data/datadog-init/package",
-			expectedFiles: []string{
-				"library.txt",
-			},
-			expectedDigest: "32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8",
-		},
-		"test image can be downloaded with other source": {
-			imagePath: "testdata/image.tar",
-			source:    "/data/other",
-			expectedFiles: []string{
-				"other.txt",
+			checkFiles: []string{
+				"data/datadog-init/package/library.txt",
+				"data/other/other.txt",
 			},
 			expectedDigest: "32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8",
 		},
@@ -128,10 +121,15 @@ func TestDownload(t *testing.T) {
 			require.Equal(t, test.expectedDigest, digest)
 
 			// Ensure downloaded files match the expected.
-			err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, test.source, tsd.Path(t))
+			err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
 			require.NoError(t, err, "error found when downloading")
-			actual := listFiles(t, tsd.Path(t))
-			require.ElementsMatch(t, test.expectedFiles, actual)
+
+			// Ensure expected files exist.
+			for _, checkFile := range test.checkFiles {
+				checkPath := filepath.Join(tsd.Path(t), checkFile)
+				_, err := os.Stat(checkPath)
+				require.NoError(t, err, "expected file %s to exist", checkPath)
+			}
 		})
 	}
 }
