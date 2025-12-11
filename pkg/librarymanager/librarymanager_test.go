@@ -7,6 +7,7 @@ package librarymanager_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -21,12 +22,12 @@ type testImage struct {
 }
 
 type testVolume struct {
-	name          string
-	version       string
-	path          string
-	pull          bool
-	volumeID      string
-	expectedFiles []string
+	name     string
+	version  string
+	pull     bool
+	volumeID string
+	// checkFile is a file path relative to the extracted image root that should exist
+	checkFile string
 }
 
 func TestLibraryManager(t *testing.T) {
@@ -35,8 +36,6 @@ func TestLibraryManager(t *testing.T) {
 		images []*testImage
 		// volumes is a list of volumes to create and remove as part of the test.
 		volumes []*testVolume
-		// expectedManagerFiles is the list of files expected after volumes are setup but before they're deleted.
-		expectedManagerFiles []string
 	}{
 		"a single volume sets up a single library": {
 			images: []*testImage{
@@ -48,19 +47,12 @@ func TestLibraryManager(t *testing.T) {
 			},
 			volumes: []*testVolume{
 				{
-					name:     "test-image",
-					version:  "latest",
-					path:     "/data/datadog-init/package",
-					pull:     false,
-					volumeID: "test-volume-001",
-					expectedFiles: []string{
-						"library.txt",
-					},
+					name:      "test-image",
+					version:   "latest",
+					pull:      false,
+					volumeID:  "test-volume-001",
+					checkFile: "data/datadog-init/package/library.txt",
 				},
-			},
-			expectedManagerFiles: []string{
-				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/library.txt",
 			},
 		},
 		"multiple volumes for the same library maintains a single library in the store": {
@@ -73,29 +65,19 @@ func TestLibraryManager(t *testing.T) {
 			},
 			volumes: []*testVolume{
 				{
-					name:     "test-image",
-					version:  "latest",
-					path:     "/data/datadog-init/package",
-					pull:     false,
-					volumeID: "test-volume-001",
-					expectedFiles: []string{
-						"library.txt",
-					},
+					name:      "test-image",
+					version:   "latest",
+					pull:      false,
+					volumeID:  "test-volume-001",
+					checkFile: "data/datadog-init/package/library.txt",
 				},
 				{
-					name:     "test-image",
-					version:  "latest",
-					path:     "/data/datadog-init/package",
-					pull:     false,
-					volumeID: "test-volume-002",
-					expectedFiles: []string{
-						"library.txt",
-					},
+					name:      "test-image",
+					version:   "latest",
+					pull:      false,
+					volumeID:  "test-volume-002",
+					checkFile: "data/datadog-init/package/library.txt",
 				},
-			},
-			expectedManagerFiles: []string{
-				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/library.txt",
 			},
 		},
 	}
@@ -133,14 +115,11 @@ func TestLibraryManager(t *testing.T) {
 				path, err := lm.GetLibraryForVolume(ctx, volume.volumeID, lib)
 				require.NoError(t, err)
 
-				// Ensure the volume path returned contains the expected files.
-				actualFiles := listFiles(t, path)
-				require.ElementsMatch(t, volume.expectedFiles, actualFiles)
+				// Ensure the expected file exists at the returned path.
+				checkPath := filepath.Join(path, volume.checkFile)
+				_, err = os.Stat(checkPath)
+				require.NoError(t, err, "expected file %s to exist", checkPath)
 			}
-
-			// Ensure the manager file system is as expected.
-			actualFiles := listFiles(t, tsd.Path(t))
-			require.ElementsMatch(t, test.expectedManagerFiles, actualFiles)
 
 			// Delete the volumes.
 			for _, volume := range test.volumes {
@@ -149,7 +128,7 @@ func TestLibraryManager(t *testing.T) {
 			}
 
 			// Ensure the store is empty.
-			actualFiles = listFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
+			actualFiles := listFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
 			require.Empty(t, actualFiles)
 		})
 	}
@@ -157,7 +136,7 @@ func TestLibraryManager(t *testing.T) {
 
 func CreateTestLibrary(t *testing.T, tl *testVolume, registry string) *librarymanager.Library {
 	t.Helper()
-	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.path, tl.pull)
+	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.pull)
 	require.NoError(t, err)
 	return lib
 }

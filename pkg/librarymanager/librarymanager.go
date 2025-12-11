@@ -95,6 +95,15 @@ func (lm *LibraryManager) Stop() error {
 	return lm.db.Close()
 }
 
+// HasVolume returns true if the volume is managed by the library manager.
+func (lm *LibraryManager) HasVolume(volumeID string) (bool, error) {
+	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
+	if err != nil {
+		return false, err
+	}
+	return libraryID != "", nil
+}
+
 // GetLibraryForVolume fetches the remote library if it doesn't exist, records its usage, and returns the path on disk
 // that can be mounted for the volume.
 func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID string, lib *Library) (string, error) {
@@ -106,7 +115,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", fmt.Errorf("library cannot be nil")
 	}
 
-	// Fetch the library ID.
+	// Fetch the library ID based on the image digest.
 	libraryID, err := lm.cache.FetchDigest(ctx, lib.Image(), lib.Pull())
 	if err != nil {
 		return "", fmt.Errorf("could not determine library ID: %w", err)
@@ -139,7 +148,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	defer os.RemoveAll(scratch)
 
 	// Download the library into the scratch space.
-	err = lm.downloader.Download(ctx, lib.Image(), lib.Source(), scratch)
+	err = lm.downloader.Download(ctx, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}

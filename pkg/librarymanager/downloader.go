@@ -39,7 +39,7 @@ func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
 
 // Download will stream a container image and extract the source directory from inside of the image to the destination
 // directory on disk.
-func (d *Downloader) Download(ctx context.Context, image string, src string, dst string) error {
+func (d *Downloader) Download(ctx context.Context, image string, dst string) error {
 	img, err := crane.Pull(image, crane.WithContext(ctx), crane.WithUserAgent(userAgent), crane.WithTransport(d.roundTripper))
 	if err != nil {
 		return fmt.Errorf("could not pull %s: %w", image, err)
@@ -50,7 +50,8 @@ func (d *Downloader) Download(ctx context.Context, image string, src string, dst
 		pw.CloseWithError(crane.Export(img, pw))
 	}()
 
-	fp, err := NewArchiveExtractor(src, dst)
+	// Extract the entire image content
+	fp, err := NewArchiveExtractor("/", dst)
 	if err != nil {
 		return fmt.Errorf("could not setup archive extractor: %w", err)
 	}

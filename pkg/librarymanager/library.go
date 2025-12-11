@@ -11,15 +11,15 @@ import (
 
 // Library represents a Datadog package to download and mount as part of a DatadogLibrary volume request.
 type Library struct {
+	image    string
 	name     string
 	registry string
 	version  string
-	path     string
 	pull     bool
 }
 
 // NewLibrary instatiates a new library from the provided fields and ensures they are valid.
-func NewLibrary(name string, registry string, version string, path string, pull bool) (*Library, error) {
+func NewLibrary(name string, registry string, version string, pull bool) (*Library, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name must be provided and cannot be empty")
 	}
@@ -29,16 +29,25 @@ func NewLibrary(name string, registry string, version string, path string, pull 
 	if version == "" {
 		return nil, fmt.Errorf("version must be provided and cannot be empty")
 	}
-	if path == "" {
-		return nil, fmt.Errorf("path must be provided and cannot be empty")
-	}
 
 	return &Library{
 		name:     name,
 		registry: registry,
 		version:  version,
-		path:     path,
 		pull:     pull,
+	}, nil
+}
+
+// NewLibraryFromImage creates a library from a full OCI image reference.
+// The image should be in the format: registry/name:tag or registry/name@digest
+func NewLibraryFromImage(image string) (*Library, error) {
+	if image == "" {
+		return nil, fmt.Errorf("image must be provided and cannot be empty")
+	}
+
+	return &Library{
+		image: image,
+		pull:  true, // Always pull when using image reference
 	}, nil
 }
 
@@ -47,12 +56,10 @@ func (l *Library) Pull() bool {
 	return l.pull
 }
 
-// Source provides the path inside the container image to extract.
-func (l *Library) Source() string {
-	return l.path
-}
-
 // Image provides a container image path pullable by crane.
 func (l *Library) Image() string {
+	if l.image != "" {
+		return l.image
+	}
 	return fmt.Sprintf("%s/%s:%s", l.registry, l.name, l.version)
 }
