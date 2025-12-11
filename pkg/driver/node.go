@@ -44,12 +44,16 @@ func (d *DatadogCSIDriver) NodeStageVolume(ctx context.Context, req *csi.NodeSta
 
 	resp, err := d.publisher.Stage(req)
 	if err != nil {
+		metrics.RecordVolumeStageAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to stage volume: %v", err)
 	}
 
-	// Not all publishers support staging, so we don't return an error
+	// Not all publishers support staging, so we don't return an error if resp is nil
 	if resp == nil {
 		klog.Infof("stage volume request not supported by any publisher")
+		metrics.RecordVolumeStageAttempt("", "", metrics.StatusUnsupported)
+	} else {
+		metrics.RecordVolumeStageAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
 	}
 
 	return &csi.NodeStageVolumeResponse{}, nil
@@ -64,12 +68,16 @@ func (d *DatadogCSIDriver) NodeUnstageVolume(ctx context.Context, req *csi.NodeU
 
 	resp, err := d.publisher.Unstage(req)
 	if err != nil {
+		metrics.RecordVolumeUnstageAttempt(metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to unstage volume: %v", err)
 	}
 
-	// Not all publishers support staging, so we don't return an error
+	// Not all publishers support staging, so we don't return an error if resp is nil
 	if resp == nil {
 		klog.Infof("unstage volume request not supported by any publisher")
+		metrics.RecordVolumeUnstageAttempt(metrics.StatusUnsupported)
+	} else {
+		metrics.RecordVolumeUnstageAttempt(metrics.StatusSuccess)
 	}
 
 	return &csi.NodeUnstageVolumeResponse{}, nil
@@ -84,12 +92,14 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 	)
 
 	resp, err := d.publisher.Publish(req)
-	if resp == nil {
-		return nil, fmt.Errorf("publish volume request not supported by any publisher")
-	}
 	if err != nil {
 		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to publish volume: %v", err)
+	}
+
+	if resp == nil {
+		metrics.RecordVolumeMountAttempt("", "", metrics.StatusUnsupported)
+		return nil, fmt.Errorf("publish volume request not supported by any publisher")
 	}
 
 	metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
@@ -104,12 +114,14 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.Nod
 	)
 
 	resp, err := d.publisher.Unpublish(req)
-	if resp == nil {
-		return nil, fmt.Errorf("unpublish volume request not supported by any publisher")
-	}
 	if err != nil {
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to unpublish volume: %v", err)
+	}
+
+	if resp == nil {
+		metrics.RecordVolumeUnMountAttempt(metrics.StatusUnsupported)
+		return nil, fmt.Errorf("unpublish volume request not supported by any publisher")
 	}
 
 	metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
