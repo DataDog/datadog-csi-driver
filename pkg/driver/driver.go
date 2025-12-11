@@ -20,12 +20,9 @@ type DatadogCSIDriver struct {
 	name    string
 	version string
 
-	apmHostSocketPath string
-	dsdHostSocketPath string
-
-	publishers map[publishers.PublisherKind]publishers.Publisher
-	fs         afero.Afero
-	mounter    mount.Interface
+	publisher publishers.Publisher
+	fs        afero.Afero
+	mounter   mount.Interface
 }
 
 // Version returns the CSI driver version
@@ -39,15 +36,11 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, version str
 	mounter := mount.New("")
 
 	return &DatadogCSIDriver{
-		name: name,
-
+		name:    name,
 		version: version,
 
-		apmHostSocketPath: apmHostSocketPath,
-		dsdHostSocketPath: dsdHostSocketPath,
-
-		publishers: publishers.GetPublishers(fs, mounter),
-		fs:         fs,
-		mounter:    mounter,
+		publisher: publishers.GetPublishers(fs, mounter, apmHostSocketPath, dsdHostSocketPath),
+		fs:        fs,
+		mounter:   mounter,
 	}, nil
 }
