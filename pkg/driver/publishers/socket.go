@@ -13,8 +13,6 @@ import (
 	"k8s.io/utils/mount"
 )
 
-const modeSocket = "socket"
-
 // socketPublisher handles socket mounts using the "type" schema (APMSocket, DSDSocket).
 type socketPublisher struct {
 	fs            afero.Afero
@@ -50,7 +48,7 @@ func (s socketPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool, error
 	targetPath := req.GetTargetPath()
 
 	// Validate that hostPath is a socket
-	hostPathIsSocket, err := isSocketPath(hostPath)
+	hostPathIsSocket, err := isSocketPath(s.fs, hostPath)
 	if err != nil {
 		return true, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
 	}

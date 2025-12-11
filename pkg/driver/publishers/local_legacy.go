@@ -15,6 +15,8 @@ import (
 	"k8s.io/utils/mount"
 )
 
+const modeLocal = "local"
+
 // localLegacyPublisher handles the deprecated mode/path schema for local (directory) mounts.
 // This publisher is deprecated and will be removed in a future release.
 // Use the "type" schema (e.g., type: APMSocketDirectory) instead.

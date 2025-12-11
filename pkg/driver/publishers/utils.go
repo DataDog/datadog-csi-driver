@@ -6,7 +6,6 @@
 package publishers
 
 import (
-	"io/fs"
 	"os"
 
 	"github.com/spf13/afero"
@@ -56,12 +55,12 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 }
 
 // isSocketPath checks if a file is a socket.
-func isSocketPath(path string) (bool, error) {
-	fileInfo, err := os.Stat(path)
+func isSocketPath(fs afero.Afero, path string) (bool, error) {
+	fileInfo, err := fs.Stat(path)
 	if err != nil {
 		return false, err
 	}
-	return fileInfo.Mode().Type() == fs.ModeSocket, nil
+	return fileInfo.Mode().Type() == os.ModeSocket, nil
 }
 
 // isAllowedPath checks if a path is in the allowed list.

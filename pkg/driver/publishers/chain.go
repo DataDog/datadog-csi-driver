@@ -10,6 +10,8 @@ import (
 	"k8s.io/klog"
 )
 
+// chainPublisher is a publisher that chains multiple publishers together.
+// It stops at the first publisher that returns true.
 type chainPublisher struct {
 	publishers []Publisher
 }

@@ -14,8 +14,6 @@ import (
 	"k8s.io/utils/mount"
 )
 
-const modeLocal = "local"
-
 // localPublisher handles directory mounts using the "type" schema
 // (APMSocketDirectory, DSDSocketDirectory, DatadogSocketsDirectory).
 type localPublisher struct {

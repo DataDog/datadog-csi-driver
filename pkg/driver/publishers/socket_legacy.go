@@ -14,6 +14,8 @@ import (
 	"k8s.io/utils/mount"
 )
 
+const modeSocket = "socket"
+
 // socketLegacyPublisher handles the deprecated mode/path schema for socket mounts.
 // This publisher is deprecated and will be removed in a future release.
 // Use the "type" schema (e.g., type: APMSocket) instead.
@@ -59,7 +61,7 @@ func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (bool,
 	}
 
 	// Validate that hostPath is a socket
-	hostPathIsSocket, err := isSocketPath(hostPath)
+	hostPathIsSocket, err := isSocketPath(s.fs, hostPath)
 	if err != nil {
 		return true, fmt.Errorf("failed to check if %q is a socket path: %w", hostPath, err)
 	}
