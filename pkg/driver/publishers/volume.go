@@ -21,4 +21,6 @@ const (
 	DatadogSocketsDirectory VolumeType = "DatadogSocketsDirectory"
 	// DatadogLibrary mounts a Datadog instrumentation library from an OCI image
 	DatadogLibrary VolumeType = "DatadogLibrary"
+	// DatadogInjectorPreload mounts the ld.so.preload file
+	DatadogInjectorPreload VolumeType = "DatadogInjectorPreload"
 )
