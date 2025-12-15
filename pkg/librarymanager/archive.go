@@ -20,6 +20,7 @@ import (
 // ArchiveExtractor extracts directories from a tar archive.
 type ArchiveExtractor struct {
 	src    string
+	dst    string      // Absolute path to destination (needed for symlinks, as afero doesn't support them)
 	dstFs  afero.Afero // BasePathFs rooted at destination
 	format archives.Tar
 }
@@ -34,6 +35,7 @@ func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtra
 	baseFs := afero.NewBasePathFs(afs.Fs, destination)
 	return &ArchiveExtractor{
 		src:    filepath.Clean("/" + src),
+		dst:    destination,
 		dstFs:  afero.Afero{Fs: baseFs},
 		format: archives.Tar{},
 	}, nil
@@ -70,6 +72,20 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 	switch {
 	case mode.IsDir():
 		return fp.dstFs.Mkdir(destPath, 0o755)
+	case mode&os.ModeSymlink != 0:
+		// Handle symbolic links
+		linkTarget := f.LinkTarget
+		if linkTarget == "" {
+			return fmt.Errorf("symlink %s has no target", destPath)
+		}
+		// Create the symlink in the destination
+		fullDestPath := filepath.Join(fp.dst, destPath)
+		// Remove existing file/symlink if it exists
+		_ = os.Remove(fullDestPath)
+		if err := os.Symlink(linkTarget, fullDestPath); err != nil {
+			return fmt.Errorf("could not create symlink %s -> %s: %w", destPath, linkTarget, err)
+		}
+		return nil
 	case mode.IsRegular():
 		in, err := f.Open()
 		if err != nil {

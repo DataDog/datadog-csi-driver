@@ -19,6 +19,15 @@ import (
 // It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
 // Returns nil if already mounted or mount succeeds.
 func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool) error {
+	// Verify source path exists before attempting mount
+	exists, err := afs.Exists(hostPath)
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to check if source path exists: %v", err)
+	}
+	if !exists {
+		return status.Errorf(codes.FailedPrecondition, "source path %q does not exist", hostPath)
+	}
+
 	// Create target path if needed
 	if err := createHostPath(afs, targetPath, isFile); err != nil {
 		return err
