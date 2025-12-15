@@ -35,18 +35,20 @@ type Publisher interface {
 //
 // The chain includes:
 //   - Library publisher (for DatadogLibrary volumes)
+//   - InjectorPreload publisher (for ld.so.preload injection)
 //   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
 //   - Legacy publishers (for deprecated "mode/path" schema)
 //   - Fallback unmount handler for all Unpublish requests
 func GetPublishers(
 	fs afero.Afero,
 	mounter mount.Interface,
-	apmSocketPath, dsdSocketPath string,
+	apmSocketPath, dsdSocketPath, storageBasePath string,
 	libraryManager *librarymanager.LibraryManager,
 ) Publisher {
 	return newChainPublisher(
 		// Order matters, the first publisher to return a response will stop the chain
 		newLibraryPublisher(fs, mounter, libraryManager),
+		newInjectorPreloadPublisher(fs, mounter, storageBasePath),
 
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),

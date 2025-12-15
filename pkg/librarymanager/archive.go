@@ -74,14 +74,21 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		return fp.dstFs.Mkdir(destPath, 0o755)
 	case mode&os.ModeSymlink != 0:
 		// Handle symbolic links
+		// Some of our packages use symbolic links to point to the actual library files, like:
+		// - dd-lib-python-init uses relative symlinks to deduplicate the library files.
+		// - apm-inject uses an absolute symlink to make the "stable" path point to the right version.
+		// These symlinks should not be followed in our store as they could be used to access files outside of the store.
+		// But once mounted in the pod, they cannot access the host filesystem anymore, so it is safe to keep them.
 		linkTarget := f.LinkTarget
 		if linkTarget == "" {
 			return fmt.Errorf("symlink %s has no target", destPath)
 		}
+		fullDestPath := filepath.Clean(filepath.Join(fp.dst, destPath))
+		// Verify the path stays within the destination root
+		if !strings.HasPrefix(fullDestPath, fp.dst+string(filepath.Separator)) {
+			return fmt.Errorf("symlink path %q escapes destination directory", destPath)
+		}
 		// Create the symlink in the destination
-		fullDestPath := filepath.Join(fp.dst, destPath)
-		// Remove existing file/symlink if it exists
-		_ = os.Remove(fullDestPath)
 		if err := os.Symlink(linkTarget, fullDestPath); err != nil {
 			return fmt.Errorf("could not create symlink %s -> %s: %w", destPath, linkTarget, err)
 		}
