@@ -16,11 +16,11 @@ import (
 )
 
 // bindMount performs a bind mount from hostPath to targetPath.
-// It creates the target path if it doesn't exist (as file if isSocket, directory otherwise).
+// It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
 // Returns nil if already mounted or mount succeeds.
-func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isSocket bool) error {
+func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool) error {
 	// Create target path if needed
-	if err := createHostPath(afs, targetPath, isSocket); err != nil {
+	if err := createHostPath(afs, targetPath, isFile); err != nil {
 		return err
 	}
 
