@@ -9,7 +9,10 @@ import (
 	"testing"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/utils/mount"
 )
 
 func TestLocalPublisher_Publish_TypeSelection(t *testing.T) {
@@ -51,6 +54,50 @@ func TestLocalPublisher_Publish_TypeSelection(t *testing.T) {
 			resp, err := publisher.Publish(req)
 			assert.Nil(t, resp)
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestLocalPublisher_Publish_Success(t *testing.T) {
+	const (
+		apmSocketPath    = "/var/run/datadog/apm.sock"
+		dsdSocketPath    = "/var/run/datadog/dsd.sock"
+		expectedHostPath = "/var/run/datadog"
+	)
+
+	volumeTypes := []string{"APMSocketDirectory", "DSDSocketDirectory", "DatadogSocketsDirectory"}
+
+	for _, volumeType := range volumeTypes {
+		t.Run(volumeType, func(t *testing.T) {
+			fs := afero.Afero{Fs: afero.NewMemMapFs()}
+			mounter := mount.NewFakeMounter(nil)
+
+			publisher := newLocalPublisher(fs, mounter, apmSocketPath, dsdSocketPath)
+
+			req := &csi.NodePublishVolumeRequest{
+				VolumeId:      "test-volume",
+				TargetPath:    "/target/datadog",
+				VolumeContext: map[string]string{"type": volumeType},
+			}
+
+			resp, err := publisher.Publish(req)
+
+			assert.NoError(t, err)
+			assert.NotNil(t, resp)
+			assert.Equal(t, VolumeType(volumeType), resp.VolumeType)
+			assert.Equal(t, expectedHostPath, resp.VolumePath)
+
+			// Verify mount was called
+			log := mounter.GetLog()
+			require.Len(t, log, 1)
+			assert.Equal(t, "mount", log[0].Action)
+			assert.Equal(t, expectedHostPath, log[0].Source)
+			assert.Equal(t, "/target/datadog", log[0].Target)
+
+			// Verify target directory was created
+			exists, err := fs.DirExists("/target/datadog")
+			assert.NoError(t, err)
+			assert.True(t, exists)
 		})
 	}
 }
