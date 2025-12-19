@@ -38,14 +38,12 @@ type Publisher interface {
 // The apmSocketPath and dsdSocketPath are the paths to the Datadog agent sockets.
 //
 // The chain includes:
-//   - SSI publisher (for Single Step Instrumentation)
 //   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
 //   - Legacy publishers (for deprecated "mode/path" schema)
 //   - Fallback unmount handler for all Unpublish requests
 func GetPublishers(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {
 	return newChainPublisher(
-		// Order matters, the first publisher to return true will stop the chain
-		newSSIPublisher(fs, mounter),
+		// Order matters, the first publisher to return a response will stop the chain
 
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
