@@ -21,14 +21,6 @@ type socketPublisher struct {
 	dsdSocketPath string
 }
 
-func (s socketPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
-func (s socketPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
 // Publish implements Publisher#Publish for the "type" schema.
 // It handles APMSocket and DSDSocket volume types.
 func (s socketPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {

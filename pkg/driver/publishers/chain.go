@@ -16,32 +16,6 @@ type chainPublisher struct {
 	publishers []Publisher
 }
 
-func (s chainPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	for _, publisher := range s.publishers {
-		resp, err := publisher.Stage(req)
-		if err != nil {
-			klog.Infof("failed to stage volume with publisher %T: %v", publisher, err)
-		}
-		if resp != nil {
-			return resp, err
-		}
-	}
-	return nil, nil
-}
-
-func (s chainPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	for _, publisher := range s.publishers {
-		resp, err := publisher.Unstage(req)
-		if err != nil {
-			klog.Infof("failed to unstage volume with publisher %T: %v", publisher, err)
-		}
-		if resp != nil {
-			return resp, err
-		}
-	}
-	return nil, nil
-}
-
 func (s chainPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
 		resp, err := publisher.Publish(req)

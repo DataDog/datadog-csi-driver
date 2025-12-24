@@ -26,14 +26,6 @@ type socketLegacyPublisher struct {
 	dsdSocketPath string
 }
 
-func (s socketLegacyPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
-func (s socketLegacyPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
 // Publish implements Publisher#Publish for the deprecated mode/path schema.
 func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()

@@ -34,20 +34,6 @@ func newCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
 	}, labels)
 }
 
-var nodeVolumeStageAttempts = newCounterVec(
-	"node_stage_volume_attempts",
-	"Counts the number of stage volume requests received by the csi node server",
-	"type",
-	"path",
-	"status",
-)
-
-var nodeVolumeUnstageAttempts = newCounterVec(
-	"node_unstage_volume_attempts",
-	"Counts the number of unstage volume requests received by the csi node server",
-	"status",
-)
-
 var nodeVolumeMountAttempts = newCounterVec(
 	"node_publish_volume_attempts",
 	"Counts the number of publish volume requests received by the csi node server",
@@ -63,20 +49,8 @@ var nodeVolumeUnmountAttempts = newCounterVec(
 )
 
 func init() {
-	prometheus.MustRegister(nodeVolumeStageAttempts)
-	prometheus.MustRegister(nodeVolumeUnstageAttempts)
 	prometheus.MustRegister(nodeVolumeMountAttempts)
 	prometheus.MustRegister(nodeVolumeUnmountAttempts)
-}
-
-// RecordVolumeStageAttempt records a volume stage attempt
-func RecordVolumeStageAttempt(volumeType, path string, status Status) {
-	nodeVolumeStageAttempts.WithLabelValues(volumeType, path, string(status)).Inc()
-}
-
-// RecordVolumeUnstageAttempt records a volume unstage attempt
-func RecordVolumeUnstageAttempt(status Status) {
-	nodeVolumeUnstageAttempts.WithLabelValues(string(status)).Inc()
 }
 
 // RecordVolumeMountAttempt records a volume mount attempt
