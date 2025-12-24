@@ -34,45 +34,7 @@ type libraryPublisher struct {
 	libraryManager *librarymanager.LibraryManager
 }
 
-// Stage downloads the library from the OCI registry and stores it locally.
-func (s libraryPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	volumeCtx := req.GetVolumeContext()
-	if !s.isSupported(volumeCtx) {
-		return nil, nil
-	}
-
-	_, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
-	if err != nil {
-		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: image}, err
-	}
-
-	return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: image}, nil
-}
-
-// Unstage removes the library from local storage if no longer needed.
-func (s libraryPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	// We don't have VolumeContext in Unstage, so we check if the volume is managed by us
-	volumeID := req.GetVolumeId()
-
-	// Check if this volume is managed by the library manager
-	hasVolume, err := s.libraryManager.HasVolume(volumeID)
-	if err != nil {
-		return nil, nil // Error checking, let other publishers try
-	}
-	if !hasVolume {
-		return nil, nil // Not our volume
-	}
-
-	err = s.libraryManager.RemoveVolume(context.Background(), volumeID)
-	if err != nil {
-		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""},
-			fmt.Errorf("failed to remove volume: %w", err)
-	}
-
-	return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""}, nil
-}
-
-// Publish bind-mounts the staged library to the target path.
+// Publish downloads the library from the OCI registry if needed and bind-mounts it to the target path.
 func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 	if !s.isSupported(volumeCtx) {
@@ -93,6 +55,8 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 }
 
 // Unpublish unmounts the library from the target path.
+// For inline CSI volumes, Kubernetes doesn't call Unstage, so we also remove the volume
+// tracking here to ensure libraries are cleaned up when no longer used.
 func (s libraryPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
 	// We don't have VolumeContext in Unpublish, so we check if the volume is managed by us
 	volumeID := req.GetVolumeId()
@@ -112,6 +76,13 @@ func (s libraryPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*Publi
 	if err != nil {
 		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""},
 			fmt.Errorf("failed to unmount library: %w", err)
+	}
+
+	// Remove volume tracking (this will also delete the library from disk if no longer used)
+	err = s.libraryManager.RemoveVolume(context.Background(), volumeID)
+	if err != nil {
+		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""},
+			fmt.Errorf("failed to remove volume tracking: %w", err)
 	}
 
 	return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""}, nil

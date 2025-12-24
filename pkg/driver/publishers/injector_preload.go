@@ -49,14 +49,6 @@ func (p *injectorPreloadPublisher) ensurePreloadFile() error {
 	return p.initErr
 }
 
-func (p *injectorPreloadPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
-func (p *injectorPreloadPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
 func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
 	if VolumeType(volumeCtx["type"]) != DatadogInjectorPreload {
