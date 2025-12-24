@@ -107,6 +107,9 @@ func TestLocalLegacyPublisher_Publish_Success(t *testing.T) {
 			fs := afero.Afero{Fs: afero.NewMemMapFs()}
 			mounter := mount.NewFakeMounter(nil)
 
+			// Create source directory
+			require.NoError(t, fs.MkdirAll(hostPath, 0755))
+
 			publisher := newLocalLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath)
 
 			req := &csi.NodePublishVolumeRequest{

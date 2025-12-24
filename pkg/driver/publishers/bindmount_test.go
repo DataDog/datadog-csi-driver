@@ -18,6 +18,9 @@ func TestBindMount_CreatesTargetDirectory(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
+	// Create source directory
+	require.NoError(t, fs.MkdirAll("/host/dir", 0755))
+
 	err := bindMount(fs, mounter, "/host/dir", "/target/dir", false)
 
 	assert.NoError(t, err)
@@ -37,7 +40,12 @@ func TestBindMount_CreatesTargetFile(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	err := bindMount(fs, mounter, "/host/socket.sock", "/target/socket.sock", true)
+	// Create source file
+	require.NoError(t, fs.MkdirAll("/host", 0755))
+	_, err := fs.Create("/host/socket.sock")
+	require.NoError(t, err)
+
+	err = bindMount(fs, mounter, "/host/socket.sock", "/target/socket.sock", true)
 
 	assert.NoError(t, err)
 	// Verify target file was created in afero
@@ -53,6 +61,9 @@ func TestBindMount_CreatesTargetFile(t *testing.T) {
 func TestBindMount_CallsMounter(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
+
+	// Create source directory
+	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 
 	err := bindMount(fs, mounter, "/host/path", "/target/path", false)
 
