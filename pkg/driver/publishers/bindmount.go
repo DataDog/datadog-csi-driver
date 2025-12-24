@@ -7,6 +7,7 @@ package publishers
 
 import (
 	"os"
+	"strings"
 
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -19,6 +20,8 @@ import (
 // It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
 // Returns nil if already mounted or mount succeeds.
 func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool) error {
+	klog.Infof("bindMount: mounting %q to %q (isFile=%t)", hostPath, targetPath, isFile)
+
 	// Verify source path exists before attempting mount
 	exists, err := afs.Exists(hostPath)
 	if err != nil {
@@ -33,45 +36,43 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 		return err
 	}
 
-	// Check if already mounted
-	notMnt, err := mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil && !os.IsNotExist(err) {
-		return status.Errorf(codes.Internal, "error checking mount point: %v", err)
-	}
-
-	// Perform bind mount if not already mounted
-	if notMnt {
-		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
-			klog.Errorf("failed to mount %q to %q: %v", hostPath, targetPath, err)
-			return status.Errorf(codes.Internal, "failed to mount: %v", err)
+	// Always attempt bind mount - IsLikelyNotMountPoint is unreliable for bind mounts
+	// If already mounted, Mount will return an error that we can ignore
+	if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
+		// Check if the error is because it's already mounted
+		if isMountAlreadyExists(err) {
+			klog.Infof("bindMount: %q is already mounted, skipping", targetPath)
+			return nil
 		}
+		klog.Errorf("failed to mount %q to %q: %v", hostPath, targetPath, err)
+		return status.Errorf(codes.Internal, "failed to mount: %v", err)
 	}
 
+	klog.Infof("bindMount: successfully mounted %q to %q", hostPath, targetPath)
 	return nil
+}
+
+// isMountAlreadyExists checks if the error indicates the mount point is already mounted
+func isMountAlreadyExists(err error) bool {
+	// mount returns "already mounted" or similar when trying to mount to an existing mount point
+	return err != nil && (strings.Contains(err.Error(), "already mounted") ||
+		strings.Contains(err.Error(), "busy"))
 }
 
 // bindUnmount unmounts the target path and removes it.
 // Returns nil if target doesn't exist or unmount succeeds.
 func bindUnmount(mounter mount.Interface, targetPath string) error {
-	// Check if the target path is a mount point
-	isNotMnt, err := mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Target doesn't exist, nothing to unmount
-			klog.Infof("target path %q does not exist, nothing to unmount", targetPath)
-			return nil
-		}
-		return status.Errorf(codes.Internal, "failed to check if target path is a mount point: %v", err)
+	// Check if target exists
+	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+		klog.Infof("target path %q does not exist, nothing to unmount", targetPath)
+		return nil
 	}
 
-	// If it's a mount point, unmount it
-	if !isNotMnt {
-		if err := mounter.Unmount(targetPath); err != nil {
-			klog.Errorf("failed to unmount target path %q: %v", targetPath, err)
-			return status.Errorf(codes.Internal, "failed to unmount target path %q: %v", targetPath, err)
-		}
-	} else {
-		klog.Infof("target path %q is not a mount point, skipping unmount", targetPath)
+	// Always attempt to unmount - IsLikelyNotMountPoint is unreliable for bind mounts
+	// Unmount will fail gracefully if it's not a mount point
+	if err := mounter.Unmount(targetPath); err != nil {
+		// Log but don't fail - it might not be a mount point
+		klog.V(4).Infof("unmount %q returned error (may not be a mount point): %v", targetPath, err)
 	}
 
 	// Remove the target path
