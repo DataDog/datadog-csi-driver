@@ -6,45 +6,54 @@
 package publishers
 
 import (
-	"fmt"
-	"os"
+	"path/filepath"
 
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"k8s.io/klog"
 	"k8s.io/utils/mount"
 )
 
+// localPublisher handles directory mounts using the "type" schema
+// (APMSocketDirectory, DSDSocketDirectory, DatadogSocketsDirectory).
 type localPublisher struct {
-	fs      afero.Afero
-	mounter mount.Interface
+	fs            afero.Afero
+	mounter       mount.Interface
+	apmSocketPath string
+	dsdSocketPath string
 }
 
-// Mount implements Publisher#Mount.
-// It mounts directory hostPath onto directory targetPath.
-// If hostPath is not found or is not a directory, it returns an error.
-func (s localPublisher) Mount(targetPath string, hostPath string) error {
-	// Check if the target path exists. Create if not present.
-	if err := createHostPath(s.fs, targetPath, false); err != nil {
-		return fmt.Errorf("failed to create required path %q: %w", targetPath, err)
+// Publish implements Publisher#Publish for the "type" schema.
+// It handles APMSocketDirectory, DSDSocketDirectory, and DatadogSocketsDirectory volume types.
+func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
+	volumeCtx := req.GetVolumeContext()
+
+	// Resolve the type to hostPath (parent directory of the socket)
+	var hostPath string
+	volumeType := VolumeType(volumeCtx["type"])
+	switch volumeType {
+	case APMSocketDirectory:
+		hostPath = filepath.Dir(s.apmSocketPath)
+	case DSDSocketDirectory:
+		hostPath = filepath.Dir(s.dsdSocketPath)
+	case DatadogSocketsDirectory:
+		klog.Warningf("%s volume type is deprecated. Prefer using %s or %s instead.",
+			DatadogSocketsDirectory, DSDSocketDirectory, APMSocketDirectory)
+		hostPath = filepath.Dir(s.dsdSocketPath)
+	default:
+		return nil, nil
 	}
 
-	notMnt, err := s.mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil && !os.IsNotExist(err) {
-		return status.Errorf(codes.Internal, "Error checking mount point: %v", err)
-	}
+	resp := &PublisherResponse{VolumeType: volumeType, VolumePath: hostPath}
+	targetPath := req.GetTargetPath()
 
-	if notMnt {
-		if err := s.mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
-			klog.Errorf("Failed to mount %q to %q: %v", hostPath, targetPath, err)
-			return status.Errorf(codes.Internal, "Failed to mount: %v", err)
-		}
-	}
-
-	return nil
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
 }
 
-func newLocalPublisher(fs afero.Afero, mounter mount.Interface) Publisher {
-	return localPublisher{fs: fs, mounter: mounter}
+func (s localPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+	return nil, nil // Handled by unmountPublisher
+}
+
+func newLocalPublisher(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {
+	return localPublisher{fs: fs, mounter: mounter, apmSocketPath: apmSocketPath, dsdSocketPath: dsdSocketPath}
 }
