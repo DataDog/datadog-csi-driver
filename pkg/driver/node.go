@@ -16,71 +16,13 @@ import (
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
-	return &csi.NodeGetCapabilitiesResponse{
-		Capabilities: []*csi.NodeServiceCapability{
-			{
-				Type: &csi.NodeServiceCapability_Rpc{
-					Rpc: &csi.NodeServiceCapability_RPC{
-						Type: csi.NodeServiceCapability_RPC_STAGE_UNSTAGE_VOLUME,
-					},
-				},
-			},
-		},
-	}, nil
+	return &csi.NodeGetCapabilitiesResponse{}, nil
 }
 
 func (d *DatadogCSIDriver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfoRequest) (*csi.NodeGetInfoResponse, error) {
 	return &csi.NodeGetInfoResponse{
 		NodeId: os.Getenv("NODE_ID"), // this is a unique identifier of the node
 	}, nil
-}
-
-func (d *DatadogCSIDriver) NodeStageVolume(ctx context.Context, req *csi.NodeStageVolumeRequest) (*csi.NodeStageVolumeResponse, error) {
-	klog.Infof(
-		"Received NodeStageVolumeRequest with volume id = %v, staging target path = %v",
-		req.GetVolumeId(),
-		req.GetStagingTargetPath(),
-	)
-
-	resp, err := d.publisher.Stage(req)
-	if err != nil {
-		metrics.RecordVolumeStageAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusFailed)
-		return nil, fmt.Errorf("failed to stage volume: %v", err)
-	}
-
-	// Not all publishers support staging, so we don't return an error if resp is nil
-	if resp == nil {
-		klog.Infof("stage volume request not supported by any publisher")
-		metrics.RecordVolumeStageAttempt("", "", metrics.StatusUnsupported)
-	} else {
-		metrics.RecordVolumeStageAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
-	}
-
-	return &csi.NodeStageVolumeResponse{}, nil
-}
-
-func (d *DatadogCSIDriver) NodeUnstageVolume(ctx context.Context, req *csi.NodeUnstageVolumeRequest) (*csi.NodeUnstageVolumeResponse, error) {
-	klog.Infof(
-		"Received NodeUnstageVolumeRequest with volume id = %v, staging target path = %v",
-		req.GetVolumeId(),
-		req.GetStagingTargetPath(),
-	)
-
-	resp, err := d.publisher.Unstage(req)
-	if err != nil {
-		metrics.RecordVolumeUnstageAttempt(metrics.StatusFailed)
-		return nil, fmt.Errorf("failed to unstage volume: %v", err)
-	}
-
-	// Not all publishers support staging, so we don't return an error if resp is nil
-	if resp == nil {
-		klog.Infof("unstage volume request not supported by any publisher")
-		metrics.RecordVolumeUnstageAttempt(metrics.StatusUnsupported)
-	} else {
-		metrics.RecordVolumeUnstageAttempt(metrics.StatusSuccess)
-	}
-
-	return &csi.NodeUnstageVolumeResponse{}, nil
 }
 
 func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {

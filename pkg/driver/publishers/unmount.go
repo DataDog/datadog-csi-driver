@@ -18,14 +18,6 @@ type unmountPublisher struct {
 	mounter mount.Interface
 }
 
-func (s unmountPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
-func (s unmountPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
 func (s unmountPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	return nil, nil
 }

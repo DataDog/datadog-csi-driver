@@ -18,16 +18,12 @@ type PublisherResponse struct {
 	VolumePath string
 }
 
-// Publisher defines logic for staging, unstaging, publishing and unpublishing volumes.
+// Publisher defines logic for publishing and unpublishing volumes.
 // Each method returns:
 //   - (*PublisherResponse, nil) if the operation succeeded
 //   - (*PublisherResponse, error) if the operation failed
 //   - (nil, nil) if the publisher does not support this request
 type Publisher interface {
-	// Stage stages the volume
-	Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error)
-	// Unstage unstages the volume
-	Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error)
 	// Publish publishes the volume
 	Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error)
 	// Unpublish unpublishes the volume

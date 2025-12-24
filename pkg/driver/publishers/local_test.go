@@ -102,20 +102,6 @@ func TestLocalPublisher_Publish_Success(t *testing.T) {
 	}
 }
 
-func TestLocalPublisher_Stage_NotSupported(t *testing.T) {
-	publisher := localPublisher{}
-	resp, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
-func TestLocalPublisher_Unstage_NotSupported(t *testing.T) {
-	publisher := localPublisher{}
-	resp, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
 func TestLocalPublisher_Unpublish_DelegatesToUnmount(t *testing.T) {
 	publisher := localPublisher{}
 	resp, err := publisher.Unpublish(&csi.NodeUnpublishVolumeRequest{})

@@ -138,20 +138,6 @@ func TestSocketPublisher_Publish_ReturnsCorrectResponse(t *testing.T) {
 	}
 }
 
-func TestSocketPublisher_Stage_NotSupported(t *testing.T) {
-	publisher := socketPublisher{}
-	resp, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
-func TestSocketPublisher_Unstage_NotSupported(t *testing.T) {
-	publisher := socketPublisher{}
-	resp, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
 func TestSocketPublisher_Unpublish_DelegatesToUnmount(t *testing.T) {
 	publisher := socketPublisher{}
 	resp, err := publisher.Unpublish(&csi.NodeUnpublishVolumeRequest{})

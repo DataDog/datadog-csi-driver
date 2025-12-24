@@ -15,22 +15,10 @@ import (
 
 // mockPublisher is a test helper that implements Publisher interface
 type mockPublisher struct {
-	stageResp     *PublisherResponse
-	stageErr      error
-	unstageResp   *PublisherResponse
-	unstageErr    error
 	publishResp   *PublisherResponse
 	publishErr    error
 	unpublishResp *PublisherResponse
 	unpublishErr  error
-}
-
-func (m mockPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return m.stageResp, m.stageErr
-}
-
-func (m mockPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return m.unstageResp, m.unstageErr
 }
 
 func (m mockPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
@@ -99,34 +87,6 @@ func TestChainPublisher_Unpublish_StopsAtFirstResponse(t *testing.T) {
 	assert.Equal(t, firstResp, resp)
 }
 
-func TestChainPublisher_Stage_StopsAtFirstResponse(t *testing.T) {
-	expectedResp := &PublisherResponse{VolumeType: "Staged", VolumePath: "/staged"}
-
-	chain := newChainPublisher(
-		mockPublisher{stageResp: nil},
-		mockPublisher{stageResp: expectedResp},
-	)
-
-	resp, err := chain.Stage(&csi.NodeStageVolumeRequest{})
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedResp, resp)
-}
-
-func TestChainPublisher_Unstage_StopsAtFirstResponse(t *testing.T) {
-	expectedResp := &PublisherResponse{VolumeType: "Unstaged", VolumePath: "/unstaged"}
-
-	chain := newChainPublisher(
-		mockPublisher{unstageResp: nil},
-		mockPublisher{unstageResp: expectedResp},
-	)
-
-	resp, err := chain.Unstage(&csi.NodeUnstageVolumeRequest{})
-
-	assert.NoError(t, err)
-	assert.Equal(t, expectedResp, resp)
-}
-
 func TestChainPublisher_EmptyChain(t *testing.T) {
 	chain := newChainPublisher()
 
@@ -138,18 +98,6 @@ func TestChainPublisher_EmptyChain(t *testing.T) {
 
 	t.Run("Unpublish returns nil", func(t *testing.T) {
 		resp, err := chain.Unpublish(&csi.NodeUnpublishVolumeRequest{})
-		assert.NoError(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("Stage returns nil", func(t *testing.T) {
-		resp, err := chain.Stage(&csi.NodeStageVolumeRequest{})
-		assert.NoError(t, err)
-		assert.Nil(t, resp)
-	})
-
-	t.Run("Unstage returns nil", func(t *testing.T) {
-		resp, err := chain.Unstage(&csi.NodeUnstageVolumeRequest{})
 		assert.NoError(t, err)
 		assert.Nil(t, resp)
 	})

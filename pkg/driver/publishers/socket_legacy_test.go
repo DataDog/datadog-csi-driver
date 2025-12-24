@@ -138,20 +138,6 @@ func TestSocketLegacyPublisher_Publish_NotASocket(t *testing.T) {
 	assert.Contains(t, err.Error(), "socket not found")
 }
 
-func TestSocketLegacyPublisher_Stage_NotSupported(t *testing.T) {
-	publisher := socketLegacyPublisher{}
-	resp, err := publisher.Stage(&csi.NodeStageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
-func TestSocketLegacyPublisher_Unstage_NotSupported(t *testing.T) {
-	publisher := socketLegacyPublisher{}
-	resp, err := publisher.Unstage(&csi.NodeUnstageVolumeRequest{})
-	assert.Nil(t, resp)
-	assert.NoError(t, err)
-}
-
 func TestSocketLegacyPublisher_Unpublish_DelegatesToUnmount(t *testing.T) {
 	publisher := socketLegacyPublisher{}
 	resp, err := publisher.Unpublish(&csi.NodeUnpublishVolumeRequest{})

@@ -23,14 +23,6 @@ type localPublisher struct {
 	dsdSocketPath string
 }
 
-func (s localPublisher) Stage(req *csi.NodeStageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
-func (s localPublisher) Unstage(req *csi.NodeUnstageVolumeRequest) (*PublisherResponse, error) {
-	return nil, nil
-}
-
 // Publish implements Publisher#Publish for the "type" schema.
 // It handles APMSocketDirectory, DSDSocketDirectory, and DatadogSocketsDirectory volume types.
 func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
