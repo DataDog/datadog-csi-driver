@@ -14,14 +14,13 @@ type lockEntry struct {
 
 // Locker is a sharded mutex to be able to perform concurrent operations on unrelated keys.
 type Locker struct {
-	mu      sync.RWMutex
+	mu      sync.Mutex
 	entries map[string]*lockEntry
 }
 
 // NewLocker initializes a new locker.
 func NewLocker() *Locker {
 	return &Locker{
-		mu:      sync.RWMutex{},
 		entries: map[string]*lockEntry{},
 	}
 }
