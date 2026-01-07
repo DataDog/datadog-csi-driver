@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -66,7 +67,7 @@ func TestExtract(t *testing.T) {
 
 			// Extract archive.
 			ctx := context.Background()
-			ae, err := librarymanager.NewArchiveExtractor(test.source, tsd.Path(t))
+			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, test.source, tsd.Path(t))
 			require.NoError(t, err, "could not setup extractor")
 			err = ae.Extract(ctx, f)
 			require.NoError(t, err, "could not extract archive")

@@ -14,24 +14,27 @@ import (
 	"strings"
 
 	"github.com/mholt/archives"
+	"github.com/spf13/afero"
 )
 
 // ArchiveExtractor extracts directories from a tar archive.
 type ArchiveExtractor struct {
 	src    string
-	dst    string
+	dstFs  afero.Afero // BasePathFs rooted at destination
 	format archives.Tar
 }
 
 // NewArchiveExtractor initializes a new archive extractor.
-func NewArchiveExtractor(src string, dst string) (*ArchiveExtractor, error) {
+func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtractor, error) {
 	destination, err := filepath.Abs(filepath.Clean(dst))
 	if err != nil {
 		return nil, fmt.Errorf("could not get absolute path for destination %s: %w", dst, err)
 	}
+	// Create a BasePathFs rooted at the destination to prevent path traversal
+	baseFs := afero.NewBasePathFs(afs.Fs, destination)
 	return &ArchiveExtractor{
 		src:    filepath.Clean("/" + src),
-		dst:    destination,
+		dstFs:  afero.Afero{Fs: baseFs},
 		format: archives.Tar{},
 	}, nil
 }
@@ -62,17 +65,11 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		return nil
 	}
 
-	// Open secure root to prevent file traversal.
-	root, err := os.OpenRoot(fp.dst)
-	if err != nil {
-		return fmt.Errorf("could not open root in %s: %w", fp.dst, err)
-	}
-	defer root.Close()
-
+	// The dstFs is a BasePathFs rooted at the destination, preventing path traversal
 	mode := f.FileInfo.Mode()
 	switch {
 	case mode.IsDir():
-		return root.Mkdir(destPath, 0o755)
+		return fp.dstFs.Mkdir(destPath, 0o755)
 	case mode.IsRegular():
 		in, err := f.Open()
 		if err != nil {
@@ -80,7 +77,7 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		}
 		defer in.Close()
 
-		out, err := root.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		out, err := fp.dstFs.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create destination file: %w", err)
 		}

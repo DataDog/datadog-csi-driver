@@ -9,8 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
+
+	"github.com/spf13/afero"
 )
 
 var ErrItemNotFound = errors.New("item not found in store")
@@ -18,18 +19,19 @@ var ErrItemNotFound = errors.New("item not found in store")
 // Store provides a file based storage solution for packages. It is not thread safe and it is up to the caller to
 // manage concurrency.
 type Store struct {
+	fs       afero.Afero
 	basePath string
 }
 
 // NewStore creates a new store and ensures the base path exists.
-func NewStore(basePath string) (*Store, error) {
+func NewStore(afs afero.Afero, basePath string) (*Store, error) {
 	// Create the base path if it doesn't exist.
-	exists, err := directoryExistsAndNotEmpty(basePath)
+	exists, err := directoryExistsAndNotEmpty(afs, basePath)
 	if err != nil {
 		return nil, fmt.Errorf("could not determine if the bath path %s is valid: %w", basePath, err)
 	}
 	if !exists {
-		err := os.MkdirAll(basePath, 0o755)
+		err := afs.MkdirAll(basePath, 0o755)
 		if err != nil {
 			return nil, fmt.Errorf("could not create base path %s: %w", basePath, err)
 		}
@@ -37,6 +39,7 @@ func NewStore(basePath string) (*Store, error) {
 
 	// Return the store.
 	return &Store{
+		fs:       afs,
 		basePath: basePath,
 	}, nil
 }
@@ -59,7 +62,7 @@ func (s *Store) Add(id string, src string) (string, error) {
 	}
 
 	// Ensure the source path is valid.
-	exists, err = directoryExistsAndNotEmpty(src)
+	exists, err = directoryExistsAndNotEmpty(s.fs, src)
 	if err != nil {
 		return "", fmt.Errorf("could not determine if the source path %s is valid: %w", src, err)
 	}
@@ -69,7 +72,7 @@ func (s *Store) Add(id string, src string) (string, error) {
 
 	// Move the source path into the store.
 	dst := s.getPath(id)
-	err = os.Rename(src, dst)
+	err = s.fs.Rename(src, dst)
 	if err != nil {
 		return "", fmt.Errorf("could not add package with id %s to store: %w", id, err)
 	}
@@ -114,7 +117,7 @@ func (s *Store) Remove(id string) error {
 
 	// Remove the item from disk.
 	path := s.getPath(id)
-	err = os.RemoveAll(path)
+	err = s.fs.RemoveAll(path)
 	if err != nil {
 		return fmt.Errorf("could not remove package with id %s: %w", id, err)
 	}
@@ -133,9 +136,9 @@ func (s *Store) Exists(id string) (bool, error) {
 }
 
 func (s *Store) exists(id string) (bool, error) {
-	// Determine if path eixsts.
+	// Determine if path exists.
 	path := s.getPath(id)
-	exists, err := directoryExistsAndNotEmpty(path)
+	exists, err := directoryExistsAndNotEmpty(s.fs, path)
 	if err != nil {
 		return false, fmt.Errorf("could not determine if package with id %s exists: %w", id, err)
 	}
@@ -146,8 +149,8 @@ func (s *Store) getPath(id string) string {
 	return filepath.Join(s.basePath, id)
 }
 
-func directoryExistsAndNotEmpty(path string) (bool, error) {
-	info, err := os.Stat(path)
+func directoryExistsAndNotEmpty(afs afero.Afero, path string) (bool, error) {
+	info, err := afs.Stat(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return false, nil
@@ -159,7 +162,7 @@ func directoryExistsAndNotEmpty(path string) (bool, error) {
 		return false, fmt.Errorf("the path %s is not a directory", path)
 	}
 
-	entries, err := os.ReadDir(path)
+	entries, err := afs.ReadDir(path)
 	if err != nil {
 		return false, fmt.Errorf("could not read directory %s: %w", path, err)
 	}

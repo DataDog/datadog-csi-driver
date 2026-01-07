@@ -11,8 +11,13 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
+
+func testFs() afero.Afero {
+	return afero.Afero{Fs: afero.NewOsFs()}
+}
 
 type TempScratchDirectory struct {
 	path string
@@ -81,7 +86,7 @@ func TestNewStore(t *testing.T) {
 			}
 
 			// Require store to create successfully and path to exist.
-			store, err := librarymanager.NewStore(basePath)
+			store, err := librarymanager.NewStore(testFs(), basePath)
 			require.NoError(t, err, "no error was expected")
 			require.NotNil(t, store, "store should not be empty when no error is returned")
 			require.DirExists(t, basePath, "directory should be created")
@@ -95,7 +100,7 @@ func TestStore(t *testing.T) {
 	defer tsd.Cleanup(t)
 
 	basePath := filepath.Join(tsd.Path(t), "base-path")
-	store, err := librarymanager.NewStore(basePath)
+	store, err := librarymanager.NewStore(testFs(), basePath)
 	require.NoError(t, err, "no error was expected")
 
 	id := "test-library-id"

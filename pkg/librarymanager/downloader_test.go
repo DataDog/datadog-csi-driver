@@ -20,6 +20,7 @@ import (
 	imageref "github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -126,8 +127,8 @@ func TestDownload(t *testing.T) {
 			require.NoError(t, err, "error found when getting digest")
 			require.Equal(t, test.expectedDigest, digest)
 
-			// Ensure downloaded files metch the expected.
-			err = d.Download(ctx, image, test.source, tsd.Path(t))
+			// Ensure downloaded files match the expected.
+			err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, test.source, tsd.Path(t))
 			require.NoError(t, err, "error found when downloading")
 			actual := listFiles(t, tsd.Path(t))
 			require.ElementsMatch(t, test.expectedFiles, actual)

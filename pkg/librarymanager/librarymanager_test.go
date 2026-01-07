@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -119,7 +120,10 @@ func TestLibraryManager(t *testing.T) {
 
 			// Setup library manager.
 			ctx := context.Background()
-			lm, err := librarymanager.NewLibraryManagerWithDownloader(basePath, d)
+			lm, err := librarymanager.NewLibraryManager(basePath,
+				librarymanager.WithFilesystem(afero.Afero{Fs: afero.NewOsFs()}),
+				librarymanager.WithDownloader(d),
+			)
 			require.NoError(t, err)
 			defer func() {
 				err := lm.Stop()

@@ -9,9 +9,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/spf13/afero"
 )
 
 const (
@@ -28,6 +29,8 @@ const (
 // LibraryManager is a high level object to manage fetching libraries for volumes. It will download, extract, store, and
 // track libraries and how they map to a volume.
 type LibraryManager struct {
+	// fs is the filesystem abstraction used for all file operations.
+	fs afero.Afero
 	// downloader is used to download container images.
 	downloader *Downloader
 	// cache is used to cache container image digests.
@@ -42,52 +45,72 @@ type LibraryManager struct {
 	scratchDir string
 }
 
-// NewLibraryManager creates a new library manager with all of the required dependencies. The base path will be used
-// by the manager to setup scratch space, library storage, and the database file.
-func NewLibraryManager(basePath string) (*LibraryManager, error) {
-	return NewLibraryManagerWithDownloader(basePath, NewDownloader())
+// LibraryManagerOption is a functional option for configuring a LibraryManager.
+type LibraryManagerOption func(*LibraryManager)
+
+// WithFilesystem sets the filesystem to use. Useful for testing.
+func WithFilesystem(fs afero.Afero) LibraryManagerOption {
+	return func(lm *LibraryManager) {
+		lm.fs = fs
+	}
 }
 
-// NewLibraryManagerWithDownloader is exposed primarily for testing purposes.
-func NewLibraryManagerWithDownloader(basePath string, d *Downloader) (*LibraryManager, error) {
+// WithDownloader sets the downloader to use. Useful for testing.
+func WithDownloader(d *Downloader) LibraryManagerOption {
+	return func(lm *LibraryManager) {
+		lm.downloader = d
+	}
+}
+
+// NewLibraryManager creates a new library manager with all of the required dependencies.
+// The basePath is required as an absolute path (rather than using afero.NewBasePathFs) because
+// bind mounts need absolute paths.
+func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryManager, error) {
+	// Create manager with defaults.
+	lm := &LibraryManager{
+		fs:         afero.Afero{Fs: afero.NewOsFs()},
+		downloader: NewDownloader(),
+		locker:     NewLocker(),
+	}
+
+	// Apply options.
+	for _, opt := range opts {
+		opt(lm)
+	}
+
 	// Setup scratch directory.
-	scratchDir := filepath.Join(basePath, ScratchDirectory)
-	err := os.MkdirAll(scratchDir, 0o755)
+	lm.scratchDir = filepath.Join(basePath, ScratchDirectory)
+	err := lm.fs.MkdirAll(lm.scratchDir, 0o755)
 	if err != nil {
-		return nil, fmt.Errorf("could not create base directory %s: %w", scratchDir, err)
+		return nil, fmt.Errorf("could not create scratch directory %s: %w", lm.scratchDir, err)
 	}
 
 	// Setup store.
 	storeDir := filepath.Join(basePath, StoreDirectory)
-	err = os.MkdirAll(storeDir, 0o755)
+	err = lm.fs.MkdirAll(storeDir, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("could not create store directory %s: %w", storeDir, err)
 	}
-	store, err := NewStore(storeDir)
+	lm.store, err = NewStore(lm.fs, storeDir)
 	if err != nil {
 		return nil, fmt.Errorf("could not create store: %w", err)
 	}
 
 	// Setup database.
 	dbDir := filepath.Join(basePath, DatabaseDirectory)
-	err = os.MkdirAll(dbDir, 0o755)
+	err = lm.fs.MkdirAll(dbDir, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("could not create db directory %s: %w", dbDir, err)
 	}
-	db, err := NewDatabase(dbDir)
+	lm.db, err = NewDatabase(dbDir)
 	if err != nil {
 		return nil, fmt.Errorf("could not create database: %w", err)
 	}
 
-	// Return library manager.
-	return &LibraryManager{
-		downloader: d,
-		cache:      NewImageCache(d, DefaultImageCacheTTL),
-		store:      store,
-		db:         db,
-		scratchDir: scratchDir,
-		locker:     NewLocker(),
-	}, nil
+	// Setup cache.
+	lm.cache = NewImageCache(lm.downloader, DefaultImageCacheTTL)
+
+	return lm, nil
 }
 
 // Stop ensures all dependencies are stopped correctly.
@@ -132,14 +155,14 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 
 	// Otherwise, create a scratch space.
-	scratch, err := os.MkdirTemp(lm.scratchDir, "datadog-csi-driver-*")
+	scratch, err := afero.TempDir(lm.fs, lm.scratchDir, "datadog-csi-driver-*")
 	if err != nil {
 		return "", fmt.Errorf("could not create scratch directory: %w", err)
 	}
-	defer os.RemoveAll(scratch)
+	defer lm.fs.RemoveAll(scratch)
 
 	// Download the library into the scratch space.
-	err = lm.downloader.Download(ctx, lib.Image(), lib.Source(), scratch)
+	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), lib.Source(), scratch)
 	if err != nil {
 		return "", err
 	}
