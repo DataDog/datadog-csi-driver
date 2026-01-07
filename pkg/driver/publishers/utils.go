@@ -18,7 +18,12 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 	klog.Infof("Checking if path %s exists (isFile=%t)", pathname, isFile)
 
 	// Check if the pathname exists
-	if _, err := os.Stat(pathname); os.IsNotExist(err) {
+	exists, err := fs.Exists(pathname)
+	if err != nil {
+		klog.Errorf("Error checking path %q: %v", pathname, err)
+		return status.Errorf(codes.Internal, "Error checking path: %v", err)
+	}
+	if !exists {
 		if isFile {
 			klog.Infof("File %s does not exist, creating...", pathname)
 			// Create the file
@@ -44,9 +49,6 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 			}
 			klog.Infof("Successfully created and set permissions for directory %s", pathname)
 		}
-	} else if err != nil {
-		klog.Errorf("Error checking path %q: %v", pathname, err)
-		return status.Errorf(codes.Internal, "Error checking path: %v", err)
 	} else {
 		klog.Infof("Path %s already exists", pathname)
 	}
@@ -61,14 +63,4 @@ func isSocketPath(fs afero.Afero, path string) (bool, error) {
 		return false, err
 	}
 	return fileInfo.Mode().Type() == os.ModeSocket, nil
-}
-
-// isAllowedPath checks if a path is in the allowed list.
-func isAllowedPath(path string, allowedPaths []string) bool {
-	for _, allowed := range allowedPaths {
-		if path == allowed {
-			return true
-		}
-	}
-	return false
 }

@@ -8,6 +8,7 @@ package publishers
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -50,7 +51,7 @@ func (s localLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publi
 
 	// Validate that hostPath is in the allowed list (parent directories of the sockets)
 	allowedPaths := []string{filepath.Dir(s.apmSocketPath), filepath.Dir(s.dsdSocketPath)}
-	if !isAllowedPath(hostPath, allowedPaths) {
+	if !slices.Contains(allowedPaths, hostPath) {
 		return resp, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
 	}
 

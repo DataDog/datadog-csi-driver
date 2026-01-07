@@ -42,7 +42,8 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 	// Not all publishers support all volume types, so we don't return an error if resp is nil
 	if resp == nil {
 		klog.Warningf("publish volume request not supported by any publisher")
-		metrics.RecordVolumeMountAttempt("", "", metrics.StatusUnsupported)
+		volumeCtx := req.GetVolumeContext()
+		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusUnsupported)
 	} else {
 		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
 	}
