@@ -10,13 +10,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/container-storage-interface/spec/lib/go/csi"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-	"k8s.io/klog"
-
-	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
+	"github.com/container-storage-interface/spec/lib/go/csi"
+	"k8s.io/klog"
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -30,84 +26,51 @@ func (d *DatadogCSIDriver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfo
 }
 
 func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	targetPath := req.GetTargetPath()
-	volumeId := req.GetVolumeId()
-	volumeCtx := req.GetVolumeContext()
-
 	klog.Infof(
 		"Received NodePublishVolumeRequest with target path = %v, volume id = %v, volume context = %v",
-		targetPath,
-		volumeId,
-		volumeCtx,
+		req.GetTargetPath(),
+		req.GetVolumeId(),
+		req.GetVolumeContext(),
 	)
 
-	ddVolumeRequest, err := d.DDVolumeRequest(req)
-
+	resp, err := d.publisher.Publish(req)
 	if err != nil {
-		metrics.RecordVolumeMountAttempt("", "", metrics.StatusFailed)
-		return nil, fmt.Errorf("failed to create dd volume request: %v", err)
+		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusFailed)
+		return nil, fmt.Errorf("failed to publish volume: %v", err)
 	}
 
-	publisher, found := d.publishers[publishers.PublisherKind(ddVolumeRequest.mode)]
-	if !found {
-		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
-		return nil, fmt.Errorf("invalid mode: %q", ddVolumeRequest.mode)
+	// Not all publishers support all volume types, so we don't return an error if resp is nil
+	if resp == nil {
+		klog.Warningf("publish volume request not supported by any publisher")
+		volumeCtx := req.GetVolumeContext()
+		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusUnsupported)
+	} else {
+		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
 	}
 
-	klog.Infof("Received volume request: %v", *ddVolumeRequest)
-	err = publisher.Mount(ddVolumeRequest.targetpath, ddVolumeRequest.path)
-	if err != nil {
-		metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusFailed)
-		return nil, fmt.Errorf("failed to perform volume mount: %v", err)
-	}
-
-	metrics.RecordVolumeMountAttempt(string(ddVolumeRequest.volumeType), ddVolumeRequest.path, metrics.StatusSuccess)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
 func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
 	klog.Infof(
-		"Received NodeUnPublishVolumeRequest with target path = %v, volume id = %v",
+		"Received NodeUnpublishVolumeRequest with target path = %v, volume id = %v",
 		req.GetTargetPath(),
 		req.GetVolumeId(),
 	)
 
-	targetPath := req.GetTargetPath()
-
-	// Check if the target path is a mount point. If it's not a mount point, nothing needs to be done.
-	isNotMnt, err := d.mounter.IsLikelyNotMountPoint(targetPath)
+	resp, err := d.publisher.Unpublish(req)
 	if err != nil {
-		if os.IsNotExist(err) {
-			// If the target path doesn't exist, there's nothing to unmount,
-			// but we return success because from a CSI perspective, the volume is no longer published.
-			klog.Info("Target path does not exist, nothing to unmount.")
-			metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
-			return &csi.NodeUnpublishVolumeResponse{}, nil
-		}
-
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
-		klog.Infof("Failed to check if target path is a mount point: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to check if target path is a mount point: %v", err)
+		return nil, fmt.Errorf("failed to unpublish volume: %v", err)
 	}
 
-	// If it's a mount point, proceed to unmount
-	if isNotMnt {
-		klog.Infof("Target path %s is not a mount point, skipping.", targetPath)
+	// Not all publishers support all volume types, so we don't return an error if resp is nil
+	if resp == nil {
+		klog.Warningf("unpublish volume request not supported by any publisher")
+		metrics.RecordVolumeUnMountAttempt(metrics.StatusUnsupported)
 	} else {
-		// Unmount the target path
-		if err := d.mounter.Unmount(targetPath); err != nil {
-			metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
-			klog.Infof("failed to unmount target path %q: %v", targetPath, err)
-			return nil, status.Errorf(codes.Internal, "failed to unmount target path %q: %v", targetPath, err)
-		}
+		metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
 	}
 
-	// After unmounting, you may also want to remove the directory to clean up, depending on your use case.
-	if err := os.RemoveAll(targetPath); err != nil {
-		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
-		return nil, status.Errorf(codes.Internal, "failed to remove target path %s: %v", targetPath, err)
-	}
-
-	metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }

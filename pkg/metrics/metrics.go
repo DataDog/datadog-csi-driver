@@ -23,6 +23,8 @@ const (
 	StatusSuccess Status = "success"
 	// StatusFailed represents the failure of an operation
 	StatusFailed = "failed"
+	// StatusUnsupported represents an operation not supported by any publisher
+	StatusUnsupported = "unsupported"
 )
 
 func newCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
@@ -32,7 +34,6 @@ func newCounterVec(name, help string, labels ...string) *prometheus.CounterVec {
 	}, labels)
 }
 
-// nodeVolumeMountAttempts tracks the number of
 var nodeVolumeMountAttempts = newCounterVec(
 	"node_publish_volume_attempts",
 	"Counts the number of publish volume requests received by the csi node server",
@@ -41,7 +42,6 @@ var nodeVolumeMountAttempts = newCounterVec(
 	"status",
 )
 
-// nodeVolumeMountAttempts tracks the number of
 var nodeVolumeUnmountAttempts = newCounterVec(
 	"node_unpublish_volume_attempts",
 	"Counts the number of unpublish volume requests received by the csi node server",

@@ -6,29 +6,50 @@
 package publishers
 
 import (
+	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
 	"k8s.io/utils/mount"
 )
 
-// Publisher defines logic for mounting and unmounting volumes.
-type Publisher interface {
-	// Mount mounts the hostPath at targetPath
-	Mount(targetPath string, hostPath string) error
+// PublisherResponse contains metadata about a handled request, used for metrics.
+// A nil response means the publisher does not support the request.
+type PublisherResponse struct {
+	VolumeType VolumeType
+	VolumePath string
 }
 
-// PublisherKind represents the type of the publisher
-type PublisherKind string
+// Publisher defines logic for publishing and unpublishing volumes.
+// Each method returns:
+//   - (*PublisherResponse, nil) if the operation succeeded
+//   - (*PublisherResponse, error) if the operation failed
+//   - (nil, nil) if the publisher does not support this request
+type Publisher interface {
+	// Publish publishes the volume
+	Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error)
+	// Unpublish unpublishes the volume
+	Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error)
+}
 
-const (
-	// Socket is the publisher kind that allows mounting UDS sockets.
-	Socket PublisherKind = "socket"
-	// Local is the publichser kind that allows mounting local directories.
-	Local = "local"
-)
+// GetPublishers returns a chain of publishers for handling CSI volume operations.
+// The apmSocketPath and dsdSocketPath are the paths to the Datadog agent sockets.
+//
+// The chain includes:
+//   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
+//   - Legacy publishers (for deprecated "mode/path" schema)
+//   - Fallback unmount handler for all Unpublish requests
+func GetPublishers(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {
+	return newChainPublisher(
+		// Order matters, the first publisher to return a response will stop the chain
 
-func GetPublishers(fs afero.Afero, mounter mount.Interface) map[PublisherKind]Publisher {
-	return map[PublisherKind]Publisher{
-		Socket: newSocketPublisher(fs, mounter),
-		Local:  newLocalPublisher(fs, mounter),
-	}
+		// New "type" schema publishers
+		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
+		newLocalPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
+
+		// Legacy "mode/path" schema publishers (deprecated)
+		newSocketLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
+		newLocalLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
+
+		// Fallback unmount handler for all Unpublish requests
+		newUnmountPublisher(mounter),
+	)
 }

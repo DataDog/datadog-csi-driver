@@ -6,7 +6,6 @@
 package publishers
 
 import (
-	"io/fs"
 	"os"
 
 	"github.com/spf13/afero"
@@ -19,7 +18,12 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 	klog.Infof("Checking if path %s exists (isFile=%t)", pathname, isFile)
 
 	// Check if the pathname exists
-	if _, err := os.Stat(pathname); os.IsNotExist(err) {
+	exists, err := fs.Exists(pathname)
+	if err != nil {
+		klog.Errorf("Error checking path %q: %v", pathname, err)
+		return status.Errorf(codes.Internal, "Error checking path: %v", err)
+	}
+	if !exists {
 		if isFile {
 			klog.Infof("File %s does not exist, creating...", pathname)
 			// Create the file
@@ -45,9 +49,6 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 			}
 			klog.Infof("Successfully created and set permissions for directory %s", pathname)
 		}
-	} else if err != nil {
-		klog.Errorf("Error checking path %q: %v", pathname, err)
-		return status.Errorf(codes.Internal, "Error checking path: %v", err)
 	} else {
 		klog.Infof("Path %s already exists", pathname)
 	}
@@ -56,10 +57,10 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 }
 
 // isSocketPath checks if a file is a socket.
-func isSocketPath(path string) (bool, error) {
-	fileInfo, err := os.Stat(path)
+func isSocketPath(fs afero.Afero, path string) (bool, error) {
+	fileInfo, err := fs.Stat(path)
 	if err != nil {
 		return false, err
 	}
-	return fileInfo.Mode().Type() == fs.ModeSocket, nil
+	return fileInfo.Mode().Type() == os.ModeSocket, nil
 }
