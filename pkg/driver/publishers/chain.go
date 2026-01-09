@@ -6,8 +6,10 @@
 package publishers
 
 import (
+	"fmt"
+
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"k8s.io/klog"
+	"github.com/rs/zerolog/log"
 )
 
 // chainPublisher is a publisher that chains multiple publishers together.
@@ -20,7 +22,7 @@ func (s chainPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	for _, publisher := range s.publishers {
 		resp, err := publisher.Publish(req)
 		if err != nil {
-			klog.Infof("failed to publish volume with publisher %T: %v", publisher, err)
+			log.Info().Err(err).Str("publisher", typeToString(publisher)).Msg("failed to publish volume with publisher")
 		}
 		if resp != nil {
 			return resp, err
@@ -29,11 +31,15 @@ func (s chainPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	return nil, nil
 }
 
+func typeToString(v interface{}) string {
+	return fmt.Sprintf("%T", v)
+}
+
 func (s chainPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
 	for _, publisher := range s.publishers {
 		resp, err := publisher.Unpublish(req)
 		if err != nil {
-			klog.Infof("failed to unpublish volume with publisher %T: %v", publisher, err)
+			log.Info().Err(err).Str("publisher", typeToString(publisher)).Msg("failed to unpublish volume with publisher")
 		}
 		if resp != nil {
 			return resp, err

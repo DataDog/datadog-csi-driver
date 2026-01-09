@@ -9,11 +9,11 @@ import (
 	"context"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"k8s.io/klog"
+	"github.com/rs/zerolog/log"
 )
 
 func (d *DatadogCSIDriver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
-	klog.V(4).Infof("Method GetPluginInfo called with: %+v", req)
+	log.Debug().Interface("request", req).Msg("Method GetPluginInfo called")
 
 	return &csi.GetPluginInfoResponse{
 		Name:          d.name,
@@ -22,7 +22,7 @@ func (d *DatadogCSIDriver) GetPluginInfo(ctx context.Context, req *csi.GetPlugin
 }
 
 func (d *DatadogCSIDriver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	klog.V(4).Infof("Method GetPluginCapabilities called with: %+v", req)
+	log.Debug().Interface("request", req).Msg("Method GetPluginCapabilities called")
 
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
@@ -36,7 +36,7 @@ func (d *DatadogCSIDriver) GetPluginCapabilities(ctx context.Context, req *csi.G
 }
 
 func (d *DatadogCSIDriver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	klog.V(4).Infof("Method Probe called with: %+v", req)
+	log.Debug().Interface("request", req).Msg("Method Probe called")
 
 	return &csi.ProbeResponse{}, nil
 }

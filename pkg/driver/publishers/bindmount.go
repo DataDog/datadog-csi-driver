@@ -8,10 +8,10 @@ package publishers
 import (
 	"os"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
 	"k8s.io/utils/mount"
 )
 
@@ -33,7 +33,7 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 	// Perform bind mount if not already mounted
 	if notMnt {
 		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
-			klog.Errorf("failed to mount %q to %q: %v", hostPath, targetPath, err)
+			log.Error().Err(err).Str("host_path", hostPath).Str("target_path", targetPath).Msg("failed to mount")
 			return status.Errorf(codes.Internal, "failed to mount: %v", err)
 		}
 	}
@@ -49,7 +49,7 @@ func bindUnmount(mounter mount.Interface, targetPath string) error {
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Target doesn't exist, nothing to unmount
-			klog.Infof("target path %q does not exist, nothing to unmount", targetPath)
+			log.Info().Str("target_path", targetPath).Msg("target path does not exist, nothing to unmount")
 			return nil
 		}
 		return status.Errorf(codes.Internal, "failed to check if target path is a mount point: %v", err)
@@ -58,11 +58,11 @@ func bindUnmount(mounter mount.Interface, targetPath string) error {
 	// If it's a mount point, unmount it
 	if !isNotMnt {
 		if err := mounter.Unmount(targetPath); err != nil {
-			klog.Errorf("failed to unmount target path %q: %v", targetPath, err)
+			log.Error().Err(err).Str("target_path", targetPath).Msg("failed to unmount target path")
 			return status.Errorf(codes.Internal, "failed to unmount target path %q: %v", targetPath, err)
 		}
 	} else {
-		klog.Infof("target path %q is not a mount point, skipping unmount", targetPath)
+		log.Info().Str("target_path", targetPath).Msg("target path is not a mount point, skipping unmount")
 	}
 
 	// Remove the target path

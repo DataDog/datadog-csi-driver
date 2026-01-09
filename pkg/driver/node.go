@@ -12,7 +12,7 @@ import (
 
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"k8s.io/klog"
+	"github.com/rs/zerolog/log"
 )
 
 func (d *DatadogCSIDriver) NodeGetCapabilities(ctx context.Context, req *csi.NodeGetCapabilitiesRequest) (*csi.NodeGetCapabilitiesResponse, error) {
@@ -26,12 +26,11 @@ func (d *DatadogCSIDriver) NodeGetInfo(ctx context.Context, req *csi.NodeGetInfo
 }
 
 func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodePublishVolumeRequest) (*csi.NodePublishVolumeResponse, error) {
-	klog.Infof(
-		"Received NodePublishVolumeRequest with target path = %v, volume id = %v, volume context = %v",
-		req.GetTargetPath(),
-		req.GetVolumeId(),
-		req.GetVolumeContext(),
-	)
+	log.Info().
+		Str("target_path", req.GetTargetPath()).
+		Str("volume_id", req.GetVolumeId()).
+		Interface("volume_context", req.GetVolumeContext()).
+		Msg("Received NodePublishVolumeRequest")
 
 	resp, err := d.publisher.Publish(req)
 	if err != nil {
@@ -41,7 +40,7 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 
 	// Not all publishers support all volume types, so we don't return an error if resp is nil
 	if resp == nil {
-		klog.Warningf("publish volume request not supported by any publisher")
+		log.Warn().Msg("publish volume request not supported by any publisher")
 		volumeCtx := req.GetVolumeContext()
 		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusUnsupported)
 	} else {
@@ -52,11 +51,10 @@ func (d *DatadogCSIDriver) NodePublishVolume(ctx context.Context, req *csi.NodeP
 }
 
 func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.NodeUnpublishVolumeRequest) (*csi.NodeUnpublishVolumeResponse, error) {
-	klog.Infof(
-		"Received NodeUnpublishVolumeRequest with target path = %v, volume id = %v",
-		req.GetTargetPath(),
-		req.GetVolumeId(),
-	)
+	log.Info().
+		Str("target_path", req.GetTargetPath()).
+		Str("volume_id", req.GetVolumeId()).
+		Msg("Received NodeUnpublishVolumeRequest")
 
 	resp, err := d.publisher.Unpublish(req)
 	if err != nil {
@@ -66,7 +64,7 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(ctx context.Context, req *csi.Nod
 
 	// Not all publishers support all volume types, so we don't return an error if resp is nil
 	if resp == nil {
-		klog.Warningf("unpublish volume request not supported by any publisher")
+		log.Warn().Msg("unpublish volume request not supported by any publisher")
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusUnsupported)
 	} else {
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)

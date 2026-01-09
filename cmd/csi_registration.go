@@ -14,8 +14,8 @@ import (
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/utils"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-	"k8s.io/klog"
 )
 
 // registerAndStartCSIDriver registers the CSI driver and starts it
@@ -32,12 +32,12 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		Version,
 	)
 	if err != nil {
-		klog.Error(err.Error())
+		log.Error().Err(err).Msg("Failed to create CSI driver")
 		return err
 	}
 
 	// Log the version
-	klog.Infof("Created Datadog CSI Driver version %v", csiDriver.Version())
+	log.Info().Str("version", csiDriver.Version()).Msg("Created Datadog CSI Driver")
 
 	// Setup grpc server
 	// TODO: check if it is necessary to use TLS in the grpc server
@@ -61,7 +61,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 	defer close(errChan)
 
 	// Starting the GRPC server for CSI
-	klog.Info("starting GRPC server for CSI driver")
+	log.Info().Msg("starting GRPC server for CSI driver")
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil {
 			errChan <- fmt.Errorf("csi grpc failed to serve: %v", err)

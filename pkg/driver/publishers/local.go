@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
-	"k8s.io/klog"
 	"k8s.io/utils/mount"
 )
 
@@ -37,8 +37,11 @@ func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	case DSDSocketDirectory:
 		hostPath = filepath.Dir(s.dsdSocketPath)
 	case DatadogSocketsDirectory:
-		klog.Warningf("%s volume type is deprecated. Prefer using %s or %s instead.",
-			DatadogSocketsDirectory, DSDSocketDirectory, APMSocketDirectory)
+		log.Warn().
+			Str("deprecated_type", string(DatadogSocketsDirectory)).
+			Str("preferred_type_1", string(DSDSocketDirectory)).
+			Str("preferred_type_2", string(APMSocketDirectory)).
+			Msg("volume type is deprecated")
 		hostPath = filepath.Dir(s.dsdSocketPath)
 	default:
 		return nil, nil
