@@ -9,11 +9,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "log/slog"
 	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/rs/zerolog/log"
 )
 
 // MetricsServer is the metrics server interface
@@ -30,7 +30,7 @@ type server struct {
 
 // Start implements MetricsServer#Start
 func (s *server) Start(ctx context.Context, errChan chan error) {
-	log.Info().Msg("starting metrics server")
+	log.Info("starting metrics server")
 	// Run server
 	go func() {
 		err := s.srv.ListenAndServe()
@@ -42,7 +42,7 @@ func (s *server) Start(ctx context.Context, errChan chan error) {
 	// Shutdown server when context is done
 	<-ctx.Done()
 	if err := s.close(); err != nil {
-		log.Error().Err(err).Msg("error closing metrics server")
+		log.Error("error closing metrics server", "error", err)
 	}
 }
 
@@ -51,7 +51,7 @@ func (s *server) close() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := s.srv.Shutdown(ctx); err != nil {
-		log.Warn().Err(err).Msg("Problem shutting down metrics HTTP server")
+		log.Warn("Problem shutting down metrics HTTP server", "error", err)
 		return err
 	}
 	return nil
@@ -61,7 +61,7 @@ func (s *server) close() error {
 func buildServer(port int) (*server, error) {
 
 	if port <= 0 {
-		log.Error().Msg("Invalid port for metric server")
+		log.Error("Invalid port for metric server")
 		return nil, errors.New("invalid port for metrics server")
 	}
 

@@ -1,35 +1,34 @@
 package main
 
 import (
+	log "log/slog"
 	"os"
-
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
 func init() {
-	// Configure zerolog for JSON output (optimal for Datadog log collection)
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
-	// Create logger with structured output to stdout
-	// Datadog will parse JSON logs and properly categorize severity levels
-	logger := zerolog.New(os.Stdout).With().
-		Timestamp().
-		Str("service", "datadog-csi-driver").
-		Logger()
-
-	// Set the global logger
-	log.Logger = logger
-
+	// Configure slog for JSON output
 	// Default to Info level, can be overridden via environment variable
 	logLevel := os.Getenv("LOG_LEVEL")
-	if logLevel == "" {
-		logLevel = "info"
+	var level log.Level
+	switch logLevel {
+	case "debug":
+		level = log.LevelDebug
+	case "warn":
+		level = log.LevelWarn
+	case "error":
+		level = log.LevelError
+	default:
+		level = log.LevelInfo
 	}
 
-	level, err := zerolog.ParseLevel(logLevel)
-	if err != nil {
-		level = zerolog.InfoLevel
-	}
-	zerolog.SetGlobalLevel(level)
+	// Create JSON handler with structured output to stdout
+	handler := log.NewJSONHandler(os.Stdout, &log.HandlerOptions{
+		Level: level,
+	})
+
+	// Create logger with service name attribute
+	logger := log.New(handler).With("service", "datadog-csi-driver")
+
+	// Set as default logger
+	log.SetDefault(logger)
 }

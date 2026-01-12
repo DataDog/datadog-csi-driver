@@ -9,13 +9,12 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	log "log/slog"
 	"os"
 	"sync"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
-	"github.com/rs/zerolog/log"
-	"k8s.io/klog/v2"
 )
 
 var (
@@ -63,16 +62,15 @@ func run() error {
 
 	err = <-errChan
 	cancel() // cancelling the context allows stopping both the grpc and the metrics server in case of error
-	log.Info().Msg("Waiting for servers to stop gracefully.")
+	log.Info("Waiting for servers to stop gracefully.")
 	wg.Wait() // block until all goroutines have finished
-	log.Info().Msg("Graceful stop finished.")
+	log.Info("Graceful stop finished.")
 	return err
 }
 
 func main() {
 	if err := run(); err != nil {
-		klog.Error(err)
-		klog.Flush()
+		log.Error("Fatal error", "error", err)
 		os.Exit(1)
 	}
 }

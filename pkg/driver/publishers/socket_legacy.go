@@ -7,10 +7,10 @@ package publishers
 
 import (
 	"fmt"
+	log "log/slog"
 	"slices"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"github.com/rs/zerolog/log"
 	"github.com/spf13/afero"
 	"k8s.io/utils/mount"
 )
@@ -43,7 +43,7 @@ func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publ
 		return nil, nil
 	}
 
-	log.Warn().Msg("Using deprecated mode/path schema. Please migrate to using 'type: APMSocket' or 'type: DSDSocket' instead.")
+	log.Warn("Using deprecated mode/path schema. Please migrate to using 'type: APMSocket' or 'type: DSDSocket' instead.")
 
 	resp := &PublisherResponse{VolumeType: VolumeType(mode), VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
@@ -66,7 +66,7 @@ func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publ
 	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
 }
 
-func (s socketLegacyPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+func (s socketLegacyPublisher) Unpublish(*csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
 	return nil, nil // Handled by unmountPublisher
 }
 
