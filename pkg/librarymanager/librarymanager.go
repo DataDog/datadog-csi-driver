@@ -171,8 +171,8 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	return lm.store.Add(libraryID, scratch)
 }
 
-// RemoveVolume removes the link in the database for the volume. If there are no more uses of the library, it is also
-// removed from disk.
+// RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
+// If there are no more uses of the library, it is also removed from disk.
 func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) error {
 	// Look up the linked library.
 	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
