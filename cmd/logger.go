@@ -6,8 +6,6 @@ import (
 )
 
 func init() {
-	// Configure slog for JSON output
-	// Default to Info level, can be overridden via environment variable
 	logLevel := os.Getenv("LOG_LEVEL")
 	var level log.Level
 	switch logLevel {
@@ -21,14 +19,8 @@ func init() {
 		level = log.LevelInfo
 	}
 
-	// Create JSON handler with structured output to stdout
 	handler := log.NewJSONHandler(os.Stdout, &log.HandlerOptions{
 		Level: level,
 	})
-
-	// Create logger with service name attribute
-	logger := log.New(handler).With("service", "datadog-csi-driver")
-
-	// Set as default logger
-	log.SetDefault(logger)
+	log.SetDefault(log.New(handler))
 }
