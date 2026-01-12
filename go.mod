@@ -6,8 +6,7 @@ toolchain go1.24.11
 
 require (
 	github.com/container-storage-interface/spec v1.11.0
-	k8s.io/klog v1.0.0
-	k8s.io/klog/v2 v2.100.1
+	k8s.io/klog/v2 v2.100.1 // indirect
 )
 
 require (
