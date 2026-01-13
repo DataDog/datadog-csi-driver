@@ -8,7 +8,6 @@ package publishers
 import (
 	"fmt"
 	"path/filepath"
-	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -26,27 +25,20 @@ type injectorPreloadPublisher struct {
 	mounter mount.Interface
 	// preloadFilePath is the path to the preload file
 	preloadFilePath string
-	// initOnce ensures the preload file is created only once
-	initOnce sync.Once
-	initErr  error
 }
 
 func (p *injectorPreloadPublisher) ensurePreloadFile() error {
-	p.initOnce.Do(func() {
-		// Create the preload file if it doesn't exist
-		exists, err := p.fs.Exists(p.preloadFilePath)
-		if err != nil {
-			p.initErr = fmt.Errorf("failed to check preload file: %w", err)
-			return
+	// Create the preload file if it doesn't exist
+	exists, err := p.fs.Exists(p.preloadFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to check preload file: %w", err)
+	}
+	if !exists {
+		if err := p.fs.WriteFile(p.preloadFilePath, []byte(defaultPreloadContent), 0644); err != nil {
+			return fmt.Errorf("failed to write preload file: %w", err)
 		}
-		if !exists {
-			if err := p.fs.WriteFile(p.preloadFilePath, []byte(defaultPreloadContent), 0644); err != nil {
-				p.initErr = fmt.Errorf("failed to write preload file: %w", err)
-				return
-			}
-		}
-	})
-	return p.initErr
+	}
+	return nil
 }
 
 func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
