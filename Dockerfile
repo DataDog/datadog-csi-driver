@@ -1,5 +1,5 @@
 # The base image is already multi-architecture, supporting both amd64 and arm64.
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24.11-alpine AS builder
 
 WORKDIR /workspace
 COPY . .
