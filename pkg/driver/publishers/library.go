@@ -19,8 +19,10 @@ import (
 
 const (
 	// VolumeContext keys for DatadogLibrary volumes
-	keyLibraryImage  = "dd.csi.datadog.com/library.image"
-	keyLibrarySource = "dd.csi.datadog.com/library.source"
+	keyLibraryPackage  = "dd.csi.datadog.com/library.package"
+	keyLibraryRegistry = "dd.csi.datadog.com/library.registry"
+	keyLibraryVersion  = "dd.csi.datadog.com/library.version"
+	keyLibrarySource   = "dd.csi.datadog.com/library.source"
 
 	// Default source path inside the OCI image
 	defaultLibrarySource = "/datadog-init/package"
@@ -97,19 +99,18 @@ func (s libraryPublisher) isSupported(volumeCtx map[string]string) bool {
 // The returned path includes the source subdirectory from the volume context.
 // Returns the path and the image reference for metrics.
 func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID string) (path, image string, err error) {
-	image = volumeCtx[keyLibraryImage]
-	if image == "" {
-		return "", "", fmt.Errorf("missing required volume context key %q", keyLibraryImage)
-	}
+	pkg := volumeCtx[keyLibraryPackage]
+	registry := volumeCtx[keyLibraryRegistry]
+	version := volumeCtx[keyLibraryVersion]
 
-	lib, err := librarymanager.NewLibraryFromImage(image)
+	lib, err := librarymanager.NewLibrary(pkg, registry, version, true)
 	if err != nil {
-		return "", image, fmt.Errorf("invalid library configuration: %w", err)
+		return "", "", fmt.Errorf("invalid library configuration: %w", err)
 	}
 
 	basePath, err := s.libraryManager.GetLibraryForVolume(context.Background(), volumeID, lib)
 	if err != nil {
-		return "", image, fmt.Errorf("failed to get library for volume: %w", err)
+		return "", lib.Image(), fmt.Errorf("failed to get library for volume: %w", err)
 	}
 
 	// Append the source path to mount only the requested subdirectory
@@ -121,7 +122,7 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	source = strings.TrimPrefix(source, "/")
 	path = filepath.Join(basePath, source)
 
-	return path, image, nil
+	return path, lib.Image(), nil
 }
 
 func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager) Publisher {

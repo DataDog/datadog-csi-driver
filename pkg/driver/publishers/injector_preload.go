@@ -62,7 +62,7 @@ func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*
 		return &PublisherResponse{VolumeType: DatadogInjectorPreload}, err
 	}
 
-	// Bind mount the file to the target path (true = target is a file, not a directory)
+	// Bind mount the file to the target path
 	if err := bindMount(p.fs, p.mounter, p.preloadFilePath, targetPath, true); err != nil {
 		return &PublisherResponse{VolumeType: DatadogInjectorPreload},
 			fmt.Errorf("failed to mount preload file: %w", err)

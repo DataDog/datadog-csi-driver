@@ -11,7 +11,6 @@ import (
 
 // Library represents a Datadog package to download and mount as part of a DatadogLibrary volume request.
 type Library struct {
-	image    string
 	name     string
 	registry string
 	version  string
@@ -38,19 +37,6 @@ func NewLibrary(name string, registry string, version string, pull bool) (*Libra
 	}, nil
 }
 
-// NewLibraryFromImage creates a library from a full OCI image reference.
-// The image should be in the format: registry/name:tag or registry/name@digest
-func NewLibraryFromImage(image string) (*Library, error) {
-	if image == "" {
-		return nil, fmt.Errorf("image must be provided and cannot be empty")
-	}
-
-	return &Library{
-		image: image,
-		pull:  true, // Always pull when using image reference
-	}, nil
-}
-
 // Pull returns if this library should be pulled or not based on the pull policy.
 func (l *Library) Pull() bool {
 	return l.pull
@@ -58,8 +44,5 @@ func (l *Library) Pull() bool {
 
 // Image provides a container image path pullable by crane.
 func (l *Library) Image() string {
-	if l.image != "" {
-		return l.image
-	}
 	return fmt.Sprintf("%s/%s:%s", l.registry, l.name, l.version)
 }

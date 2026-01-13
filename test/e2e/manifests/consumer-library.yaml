@@ -32,5 +32,6 @@ spec:
       driver: k8s.csi.datadoghq.com
       volumeAttributes:
         type: DatadogLibrary
-        dd.csi.datadog.com/library.image: gcr.io/datadoghq/dd-lib-php-init:v1.14.1
-
+        dd.csi.datadog.com/library.package: dd-lib-php-init
+        dd.csi.datadog.com/library.registry: gcr.io/datadoghq
+        dd.csi.datadog.com/library.version: v1.14.1

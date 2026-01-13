@@ -64,32 +64,3 @@ func TestNewLibrary(t *testing.T) {
 		})
 	}
 }
-
-func TestNewLibraryFromImage(t *testing.T) {
-	tests := map[string]struct {
-		image   string
-		wantErr bool
-	}{
-		"valid image": {
-			image:   "gcr.io/datadoghq/dd-lib-java-init:v1.56.2",
-			wantErr: false,
-		},
-		"empty image causes error": {
-			image:   "",
-			wantErr: true,
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			lib, err := librarymanager.NewLibraryFromImage(test.image)
-			if test.wantErr {
-				require.Error(t, err, "error was expected")
-				return
-			}
-			require.NoError(t, err, "no error was expected")
-			require.Equal(t, test.image, lib.Image())
-			require.True(t, lib.Pull())
-		})
-	}
-}
