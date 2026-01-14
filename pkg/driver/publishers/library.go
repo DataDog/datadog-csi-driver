@@ -39,8 +39,8 @@ type libraryPublisher struct {
 // Publish downloads the library from the OCI registry if needed and bind-mounts it to the target path.
 func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
 	volumeCtx := req.GetVolumeContext()
-	if !s.isSupported(volumeCtx) {
-		return nil, nil
+	if VolumeType(volumeCtx["type"]) != DatadogLibrary {
+		return nil, nil // Not our volume
 	}
 
 	libraryPath, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
@@ -88,11 +88,6 @@ func (s libraryPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*Publi
 	}
 
 	return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""}, nil
-}
-
-// isSupported returns true if the volume context indicates a DatadogLibrary volume.
-func (s libraryPublisher) isSupported(volumeCtx map[string]string) bool {
-	return VolumeType(volumeCtx["type"]) == DatadogLibrary
 }
 
 // getLibraryPath downloads the library if needed and returns the local path to mount.
