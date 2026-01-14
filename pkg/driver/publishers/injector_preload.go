@@ -8,6 +8,7 @@ package publishers
 import (
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -25,20 +26,25 @@ type injectorPreloadPublisher struct {
 	mounter mount.Interface
 	// preloadFilePath is the path to the preload file
 	preloadFilePath string
+	// mu protects the check-and-create operation
+	mu sync.Mutex
 }
 
-func (p *injectorPreloadPublisher) ensurePreloadFile() error {
-	// Create the preload file if it doesn't exist
-	exists, err := p.fs.Exists(p.preloadFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to check preload file: %w", err)
+func (p *injectorPreloadPublisher) ensurePreloadFileExists() error {
+	// Fast path: check without lock
+	if exists, err := p.fs.Exists(p.preloadFilePath); err != nil || exists {
+		return err
 	}
-	if !exists {
-		if err := p.fs.WriteFile(p.preloadFilePath, []byte(defaultPreloadContent), 0644); err != nil {
-			return fmt.Errorf("failed to write preload file: %w", err)
-		}
+
+	// Slow path: lock and double-check before creating
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if exists, err := p.fs.Exists(p.preloadFilePath); err != nil || exists {
+		return err
 	}
-	return nil
+
+	return p.fs.WriteFile(p.preloadFilePath, []byte(defaultPreloadContent), 0644)
 }
 
 func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherResponse, error) {
@@ -50,7 +56,7 @@ func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*
 	targetPath := req.GetTargetPath()
 
 	// Ensure the preload file exists
-	if err := p.ensurePreloadFile(); err != nil {
+	if err := p.ensurePreloadFileExists(); err != nil {
 		return &PublisherResponse{VolumeType: DatadogInjectorPreload}, err
 	}
 
