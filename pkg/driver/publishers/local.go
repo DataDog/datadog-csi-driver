@@ -6,11 +6,11 @@
 package publishers
 
 import (
+	log "log/slog"
 	"path/filepath"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
-	"k8s.io/klog"
 	"k8s.io/utils/mount"
 )
 
@@ -37,8 +37,7 @@ func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	case DSDSocketDirectory:
 		hostPath = filepath.Dir(s.dsdSocketPath)
 	case DatadogSocketsDirectory:
-		klog.Warningf("%s volume type is deprecated. Prefer using %s or %s instead.",
-			DatadogSocketsDirectory, DSDSocketDirectory, APMSocketDirectory)
+		log.Warn("volume type is deprecated, preferred type is 'DSDSocketDirectory' or 'APMSocketDirectory'")
 		hostPath = filepath.Dir(s.dsdSocketPath)
 	default:
 		return nil, nil
@@ -50,7 +49,7 @@ func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
 }
 
-func (s localPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
+func (s localPublisher) Unpublish(*csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
 	return nil, nil // Handled by unmountPublisher
 }
 

@@ -7,13 +7,13 @@ package driver
 
 import (
 	"context"
+	log "log/slog"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
-	"k8s.io/klog"
 )
 
-func (d *DatadogCSIDriver) GetPluginInfo(ctx context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
-	klog.V(4).Infof("Method GetPluginInfo called with: %+v", req)
+func (d *DatadogCSIDriver) GetPluginInfo(_ context.Context, req *csi.GetPluginInfoRequest) (*csi.GetPluginInfoResponse, error) {
+	log.Debug("Method GetPluginInfo called", "request", req)
 
 	return &csi.GetPluginInfoResponse{
 		Name:          d.name,
@@ -21,8 +21,8 @@ func (d *DatadogCSIDriver) GetPluginInfo(ctx context.Context, req *csi.GetPlugin
 	}, nil
 }
 
-func (d *DatadogCSIDriver) GetPluginCapabilities(ctx context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
-	klog.V(4).Infof("Method GetPluginCapabilities called with: %+v", req)
+func (d *DatadogCSIDriver) GetPluginCapabilities(_ context.Context, req *csi.GetPluginCapabilitiesRequest) (*csi.GetPluginCapabilitiesResponse, error) {
+	log.Debug("Method GetPluginCapabilities called", "request", req)
 
 	return &csi.GetPluginCapabilitiesResponse{
 		Capabilities: []*csi.PluginCapability{
@@ -35,8 +35,8 @@ func (d *DatadogCSIDriver) GetPluginCapabilities(ctx context.Context, req *csi.G
 	}, nil
 }
 
-func (d *DatadogCSIDriver) Probe(ctx context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
-	klog.V(4).Infof("Method Probe called with: %+v", req)
+func (d *DatadogCSIDriver) Probe(_ context.Context, req *csi.ProbeRequest) (*csi.ProbeResponse, error) {
+	log.Debug("Method Probe called", "request", req)
 
 	return &csi.ProbeResponse{}, nil
 }

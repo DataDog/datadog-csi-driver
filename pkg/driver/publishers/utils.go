@@ -6,51 +6,51 @@
 package publishers
 
 import (
+	log "log/slog"
 	"os"
 
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/klog"
 )
 
 func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
-	klog.Infof("Checking if path %s exists (isFile=%t)", pathname, isFile)
+	log.Info("Checking if path exists", "path", pathname, "is_file", isFile)
 
 	// Check if the pathname exists
 	exists, err := fs.Exists(pathname)
 	if err != nil {
-		klog.Errorf("Error checking path %q: %v", pathname, err)
+		log.Error("Error checking path", "error", err, "path", pathname)
 		return status.Errorf(codes.Internal, "Error checking path: %v", err)
 	}
 	if !exists {
 		if isFile {
-			klog.Infof("File %s does not exist, creating...", pathname)
+			log.Info("File does not exist, creating", "path", pathname)
 			// Create the file
 			file, err := fs.Create(pathname)
 			if err != nil {
-				klog.Errorf("Failed to create file %s: %v", pathname, err)
+				log.Error("Failed to create file", "error", err, "path", pathname)
 				return status.Errorf(codes.Internal, "Cannot create file: %v", err)
 			}
 			defer file.Close() // Ensure the file gets closed after creation
-			klog.Infof("Successfully created file %s", pathname)
+			log.Info("Successfully created file", "path", pathname)
 		} else {
-			klog.Infof("Directory %q does not exist, creating...", pathname)
+			log.Info("Directory does not exist, creating", "path", pathname)
 			const dirPerm = 0755
 			// Create the directory
 			if err := fs.MkdirAll(pathname, dirPerm); err != nil {
-				klog.Errorf("Failed to create directory %s: %v", pathname, err)
+				log.Error("Failed to create directory", "error", err, "path", pathname)
 				return status.Errorf(codes.Internal, "Cannot create directory: %v", err)
 			}
 			// Set permissions explicitly
 			if err := fs.Chmod(pathname, dirPerm); err != nil {
-				klog.Errorf("Failed to set permissions for directory %s: %v", pathname, err)
+				log.Error("Failed to set permissions for directory", "error", err, "path", pathname)
 				return status.Errorf(codes.Internal, "Cannot set permissions: %v", err)
 			}
-			klog.Infof("Successfully created and set permissions for directory %s", pathname)
+			log.Info("Successfully created and set permissions for directory", "path", pathname)
 		}
 	} else {
-		klog.Infof("Path %s already exists", pathname)
+		log.Info("Path already exists", "path", pathname)
 	}
 
 	return nil
