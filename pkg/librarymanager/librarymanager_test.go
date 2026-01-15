@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -100,7 +101,7 @@ func TestLibraryManager(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			// Setup local registry
-			localRegistry := NewLocalRegistry(t)
+			localRegistry := testutil.NewLocalRegistry(t)
 			defer localRegistry.Stop()
 			for _, img := range test.images {
 				localRegistry.AddImage(t, img.tarPath, img.name, img.tag)
@@ -110,7 +111,7 @@ func TestLibraryManager(t *testing.T) {
 			d := librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))
 
 			// Create scratch space.
-			tsd := NewTempScratchDirectory(t)
+			tsd := testutil.NewTempScratchDirectory(t)
 			defer tsd.Cleanup(t)
 			basePath := tsd.Path(t)
 
@@ -129,19 +130,19 @@ func TestLibraryManager(t *testing.T) {
 			// Setup all volumes and ensure they have expected files.
 			for _, volume := range test.volumes {
 				// Get library for the volume.
-				lib := CreateTestLibrary(t, volume, localRegistry.Registry(t))
+				lib := createTestLibrary(t, volume, localRegistry.Registry(t))
 				path, err := lm.GetLibraryForVolume(ctx, volume.volumeID, lib)
 				require.NoError(t, err)
 
 				// Ensure the volume path returned contains the expected files.
-				actualFiles := listFiles(t, path)
+				actualFiles := testutil.ListFiles(t, path)
 				for _, expected := range volume.expectedFiles {
 					require.Contains(t, actualFiles, expected)
 				}
 			}
 
 			// Ensure the manager file system contains the expected files.
-			actualFiles := listFiles(t, tsd.Path(t))
+			actualFiles := testutil.ListFiles(t, tsd.Path(t))
 			for _, expected := range test.expectedManagerFiles {
 				require.Contains(t, actualFiles, expected)
 			}
@@ -153,13 +154,13 @@ func TestLibraryManager(t *testing.T) {
 			}
 
 			// Ensure the store is empty.
-			actualFiles = listFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
+			actualFiles = testutil.ListFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
 			require.Empty(t, actualFiles)
 		})
 	}
 }
 
-func CreateTestLibrary(t *testing.T, tl *testVolume, registry string) *librarymanager.Library {
+func createTestLibrary(t *testing.T, tl *testVolume, registry string) *librarymanager.Library {
 	t.Helper()
 	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.pull)
 	require.NoError(t, err)

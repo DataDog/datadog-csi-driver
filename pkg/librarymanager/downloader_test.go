@@ -7,82 +7,15 @@ package librarymanager_test
 
 import (
 	"context"
-	"fmt"
-	"io"
-	"log"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
-	"github.com/google/go-containerregistry/pkg/crane"
-	imageref "github.com/google/go-containerregistry/pkg/name"
-	"github.com/google/go-containerregistry/pkg/registry"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
-
-type LocalRegistry struct {
-	srv        *httptest.Server
-	stopped    bool
-	registry   string
-	Downloader *librarymanager.Downloader
-}
-
-func NewLocalRegistry(t *testing.T) *LocalRegistry {
-	// Create the test server
-	srv := httptest.NewServer(registry.New(registry.Logger(log.New(io.Discard, "", log.LstdFlags))))
-
-	// Create downloader.
-	d := librarymanager.NewDownloaderWithRoundTripper(srv.Client().Transport)
-	return &LocalRegistry{
-		Downloader: d,
-		srv:        srv,
-		registry:   strings.TrimPrefix(srv.URL, "http://"),
-	}
-}
-
-func (lr *LocalRegistry) Stop() {
-	if !lr.stopped {
-		lr.stopped = true
-		lr.srv.Close()
-	}
-}
-
-func (lr *LocalRegistry) Registry(t *testing.T) string {
-	return lr.registry
-}
-
-func (lr *LocalRegistry) AddImage(t *testing.T, tarPath string, name string, version string) string {
-	// Validate state.
-	require.False(t, lr.stopped, "cannot add image to stopped local registry")
-
-	// Create image ref.
-	image := fmt.Sprintf("%s/%s:%s", lr.registry, name, version)
-	ref, err := imageref.NewTag(image, imageref.Insecure)
-	require.NoError(t, err, "could not generate image ref")
-
-	// Load image from tarball.
-	img, err := tarball.ImageFromPath(tarPath, nil)
-	require.NoError(t, err, "could not load tarball image")
-
-	// Push image to test server.
-	err = crane.Push(img, ref.String(), crane.WithTransport(lr.srv.Client().Transport))
-	require.NoError(t, err, "could not load tarball image")
-
-	// Return image string.
-	return image
-}
-
-func (lr *LocalRegistry) GetRoundTripper(t *testing.T) http.RoundTripper {
-	// Validate state.
-	require.False(t, lr.stopped, "cannot add image to stopped local registry")
-	return lr.srv.Client().Transport
-}
 
 func TestDownload(t *testing.T) {
 	tests := map[string]struct {
@@ -103,7 +36,7 @@ func TestDownload(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			// Setup local registry
-			localRegistry := NewLocalRegistry(t)
+			localRegistry := testutil.NewLocalRegistry(t)
 			defer localRegistry.Stop()
 			image := localRegistry.AddImage(t, test.imagePath, "test", "latest")
 
@@ -111,7 +44,7 @@ func TestDownload(t *testing.T) {
 			d := librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))
 
 			// Create scratch space.
-			tsd := NewTempScratchDirectory(t)
+			tsd := testutil.NewTempScratchDirectory(t)
 			defer tsd.Cleanup(t)
 
 			// Ensure digest matches expected.

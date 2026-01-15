@@ -11,12 +11,13 @@ import (
 	"time"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestImageCache(t *testing.T) {
 	// Setup local registry
-	localRegistry := NewLocalRegistry(t)
+	localRegistry := testutil.NewLocalRegistry(t)
 	defer localRegistry.Stop()
 	image := localRegistry.AddImage(t, "testdata/image.tar", "test", "latest")
 
@@ -68,7 +69,7 @@ func TestImageCacheInvalidImageReference(t *testing.T) {
 
 func TestImageCacheTTLExpiration(t *testing.T) {
 	// Setup local registry
-	localRegistry := NewLocalRegistry(t)
+	localRegistry := testutil.NewLocalRegistry(t)
 	defer localRegistry.Stop()
 	image := localRegistry.AddImage(t, "testdata/image.tar", "test", "latest")
 

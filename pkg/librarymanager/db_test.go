@@ -9,12 +9,13 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestDatabase(t *testing.T) {
 	// Create scratch space.
-	tsd := NewTempScratchDirectory(t)
+	tsd := testutil.NewTempScratchDirectory(t)
 	defer tsd.Cleanup(t)
 
 	// Create the database.
