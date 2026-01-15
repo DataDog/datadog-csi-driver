@@ -71,7 +71,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 	defer grpcServer.GracefulStop()
 	defer func() {
 		if err := csiDriver.Stop(); err != nil {
-			klog.Errorf("failed to stop CSI driver: %v", err)
+			log.Error("failed to stop CSI driver", "error", err)
 		}
 	}()
 

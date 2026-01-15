@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
-	"k8s.io/klog"
+	log "log/slog"
 )
 
 const (
@@ -161,7 +161,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	if path != "" {
-		klog.Infof("Library %s already cached at %s", lib.Image(), path)
+		log.Info("Library already cached", "image", lib.Image(), "path", path)
 		return path, nil
 	}
 
@@ -173,7 +173,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	defer lm.fs.RemoveAll(scratch)
 
 	// Download the library into the scratch space.
-	klog.Infof("Downloading library %s...", lib.Image())
+	log.Info("Downloading library", "image", lib.Image())
 	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
@@ -184,7 +184,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	if err != nil {
 		return "", err
 	}
-	klog.Infof("Library %s downloaded and stored at %s", lib.Image(), storePath)
+	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
 	return storePath, nil
 }
 
@@ -213,14 +213,14 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 		return fmt.Errorf("could not get linked library count")
 	}
 	if count == 0 {
-		klog.Infof("No more volumes using library %s, removing from disk", libraryID)
+		log.Info("No more volumes using library, removing from disk", "library_id", libraryID)
 		err = lm.store.Remove(libraryID)
 		if err != nil {
 			return err
 		}
-		klog.Infof("Library %s removed from disk", libraryID)
+		log.Info("Library removed from disk", "library_id", libraryID)
 	} else {
-		klog.V(4).Infof("Library %s still used by %d volume(s), keeping on disk", libraryID, count)
+		log.Info("Library still used by volumes, keeping on disk", "library_id", libraryID, "count", count)
 	}
 
 	return nil
