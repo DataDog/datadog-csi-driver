@@ -22,10 +22,10 @@ const (
 	keyLibraryPackage  = "dd.csi.datadog.com/library.package"
 	keyLibraryRegistry = "dd.csi.datadog.com/library.registry"
 	keyLibraryVersion  = "dd.csi.datadog.com/library.version"
-	keyLibrarySource   = "dd.csi.datadog.com/library.source"
 
-	// Default source path inside the OCI image
-	defaultLibrarySource = "/datadog-init/package"
+	// Ssource path inside the OCI images
+	languageLibrarySourcePath = "/datadog-init/package"
+	injectorLibrarySourcePath = "/opt/datadog-packages/datadog-apm-inject"
 )
 
 // libraryPublisher handles DatadogLibrary volumes.
@@ -109,10 +109,11 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	}
 
 	// Append the source path to mount only the requested subdirectory
-	source := volumeCtx[keyLibrarySource]
-	if source == "" {
-		source = defaultLibrarySource
+	source := languageLibrarySourcePath
+	if pkg == "apm-inject" {
+		source = injectorLibrarySourcePath
 	}
+
 	// Remove leading slash from source to join paths correctly
 	source = strings.TrimPrefix(source, "/")
 	path = filepath.Join(basePath, source)
