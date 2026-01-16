@@ -62,6 +62,7 @@ func TestInjectorPreloadPublisher_Publish_Success(t *testing.T) {
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume",
 		TargetPath:    "/target/ld.so.preload",
+		Readonly:      true, // Injector preload volumes must be mounted read-only
 		VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
 	}
 
@@ -96,6 +97,7 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume-1",
 		TargetPath:    "/target1/ld.so.preload",
+		Readonly:      true,
 		VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
 	}
 
@@ -108,6 +110,7 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	req2 := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume-2",
 		TargetPath:    "/target2/ld.so.preload",
+		Readonly:      true,
 		VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
 	}
 
@@ -137,6 +140,7 @@ func TestInjectorPreloadPublisher_Publish_Concurrent(t *testing.T) {
 			req := &csi.NodePublishVolumeRequest{
 				VolumeId:      "test-volume",
 				TargetPath:    "/target/ld.so.preload",
+				Readonly:      true,
 				VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
 			}
 			_, err := publisher.Publish(req)

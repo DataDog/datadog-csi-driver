@@ -7,6 +7,7 @@ package publishers
 
 import (
 	"log/slog"
+	"os"
 
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -35,15 +36,11 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 	}
 
 	// Check if already mounted
+	// Note: IsLikelyNotMountPoint uses os.Stat internally, so we ignore "not exist" errors
+	// which can happen in tests with MemMapFs or when the target was just created
 	notMnt, err := mounter.IsLikelyNotMountPoint(targetPath)
-	if err != nil {
-		// Check if target doesn't exist yet (which is fine, we just created it)
-		exists, existsErr := afs.Exists(targetPath)
-		if existsErr != nil || !exists {
-			notMnt = true // Treat as not mounted if target doesn't exist
-		} else {
-			return status.Errorf(codes.Internal, "bindMount: failed to check mount point: %v", err)
-		}
+	if err != nil && !os.IsNotExist(err) {
+		return status.Errorf(codes.Internal, "bindMount: failed to check mount point: %v", err)
 	}
 
 	// Perform bind mount if not already mounted

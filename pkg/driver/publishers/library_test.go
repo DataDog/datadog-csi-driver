@@ -96,6 +96,7 @@ func TestLibraryPublisher_Publish_InvalidLibraryConfig(t *testing.T) {
 			req := &csi.NodePublishVolumeRequest{
 				VolumeId:      "test-volume",
 				TargetPath:    "/target/path",
+				Readonly:      true, // Library volumes must be mounted read-only
 				VolumeContext: tc.volumeContext,
 			}
 
@@ -136,12 +137,13 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:   "test-volume-123",
 		TargetPath: targetPath,
+		Readonly:   true, // Library volumes must be mounted read-only
 		VolumeContext: map[string]string{
 			"type":                                "DatadogLibrary",
 			"dd.csi.datadog.com/library.package":  "test-image",
 			"dd.csi.datadog.com/library.registry": localRegistry.Registry(t),
 			"dd.csi.datadog.com/library.version":  "v1.0.0",
-			"dd.csi.datadog.com/library.source":   "/data/datadog-init/package",
+			"dd.csi.datadog.com/library.source":   "/datadog-init/package",
 		},
 	}
 
@@ -152,14 +154,22 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 	assert.Equal(t, DatadogLibrary, resp.VolumeType)
 	assert.Contains(t, resp.VolumePath, "test-image:v1.0.0")
 
-	// Verify mount was called
+	// Verify overlay mount was called
 	mountLog := mounter.GetLog()
 	require.Len(t, mountLog, 1)
 	assert.Equal(t, "mount", mountLog[0].Action)
 	assert.Equal(t, targetPath, mountLog[0].Target)
-	// Source should end with the library source path
-	assert.True(t, strings.HasSuffix(mountLog[0].Source, "data/datadog-init/package"),
-		"source path should end with library source, got: %s", mountLog[0].Source)
+	// With overlayfs, source is "overlay" and type is "overlay"
+	assert.Equal(t, "overlay", mountLog[0].Source)
+	assert.Equal(t, "overlay", mountLog[0].FSType)
+
+	// Verify mount options contain lowerdir with the library path
+	mountPoints := mounter.MountPoints
+	require.Len(t, mountPoints, 1)
+	require.True(t, len(mountPoints[0].Opts) >= 3, "should have lowerdir, upperdir, workdir options")
+	lowerDirOpt := mountPoints[0].Opts[0]
+	assert.True(t, strings.Contains(lowerDirOpt, "lowerdir=") && strings.Contains(lowerDirOpt, "datadog-init/package"),
+		"first option should be lowerdir with library path, got: %s", lowerDirOpt)
 }
 
 func TestLibraryPublisher_Unpublish_Success(t *testing.T) {
@@ -189,12 +199,13 @@ func TestLibraryPublisher_Unpublish_Success(t *testing.T) {
 	publishReq := &csi.NodePublishVolumeRequest{
 		VolumeId:   "test-volume-456",
 		TargetPath: targetPath,
+		Readonly:   true, // Library volumes must be mounted read-only
 		VolumeContext: map[string]string{
 			"type":                                "DatadogLibrary",
 			"dd.csi.datadog.com/library.package":  "test-image",
 			"dd.csi.datadog.com/library.registry": localRegistry.Registry(t),
 			"dd.csi.datadog.com/library.version":  "v1.0.0",
-			"dd.csi.datadog.com/library.source":   "/data/datadog-init/package",
+			"dd.csi.datadog.com/library.source":   "/datadog-init/package",
 		},
 	}
 

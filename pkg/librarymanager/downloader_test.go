@@ -26,10 +26,10 @@ func TestDownload(t *testing.T) {
 		"test image can be downloaded": {
 			imagePath: "testdata/image.tar",
 			checkFiles: []string{
-				"data/datadog-init/package/library.txt",
-				"data/other/other.txt",
+				"datadog-init/package/library.txt",
+				"other/other.txt",
 			},
-			expectedDigest: "32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8",
+			expectedDigest: "56275150d5d94778425fc2fd850ff88c28e1d478e3812fa1255aed86ab9c143e",
 		},
 	}
 

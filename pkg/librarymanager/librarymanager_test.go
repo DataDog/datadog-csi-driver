@@ -54,13 +54,13 @@ func TestLibraryManager(t *testing.T) {
 					pull:     false,
 					volumeID: "test-volume-001",
 					expectedFiles: []string{
-						"data/datadog-init/package/library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 			},
 			expectedManagerFiles: []string{
 				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/data/datadog-init/package/library.txt",
+				"store/56275150d5d94778425fc2fd850ff88c28e1d478e3812fa1255aed86ab9c143e/datadog-init/package/library.txt",
 			},
 		},
 		"multiple volumes for the same library maintains a single library in the store": {
@@ -78,7 +78,7 @@ func TestLibraryManager(t *testing.T) {
 					pull:     false,
 					volumeID: "test-volume-001",
 					expectedFiles: []string{
-						"data/datadog-init/package/library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 				{
@@ -87,13 +87,13 @@ func TestLibraryManager(t *testing.T) {
 					pull:     false,
 					volumeID: "test-volume-002",
 					expectedFiles: []string{
-						"data/datadog-init/package/library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 			},
 			expectedManagerFiles: []string{
 				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/data/datadog-init/package/library.txt",
+				"store/56275150d5d94778425fc2fd850ff88c28e1d478e3812fa1255aed86ab9c143e/datadog-init/package/library.txt",
 			},
 		},
 	}

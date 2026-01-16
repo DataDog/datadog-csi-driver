@@ -1,5 +1,3 @@
 FROM gcr.io/distroless/static
 
-WORKDIR /data
-
-COPY contents/ .
+COPY contents/ /
