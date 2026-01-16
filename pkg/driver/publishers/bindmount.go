@@ -7,8 +7,6 @@ package publishers
 
 import (
 	"log/slog"
-	"os"
-	"strings"
 
 	"github.com/spf13/afero"
 	"google.golang.org/grpc/codes"
@@ -20,6 +18,8 @@ import (
 // It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
 // Returns nil if already mounted or mount succeeds.
 func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool) error {
+	slog.Info("bindMount: mounting", "host_path", hostPath, "target_path", targetPath)
+
 	// Verify source path exists before attempting mount
 	exists, err := afs.Exists(hostPath)
 	if err != nil {
@@ -34,49 +34,56 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 		return err
 	}
 
-	// Always attempt bind mount - IsLikelyNotMountPoint is unreliable for bind mounts
-	// (See https://github.com/kubernetes/utils/blob/914a6e7505707ae6d13abe19730c24b4cfde9e6f/mount/mount.go#L59-L60)
-	//
-	// If already mounted, Mount will return an error that we can ignore
-	if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
-		// Check if the error is because it's already mounted
-		if isMountAlreadyExists(err) {
-			slog.Info("bindMount: already mounted, skipping", "target_path", targetPath)
-			return nil
+	// Check if already mounted
+	notMnt, err := mounter.IsLikelyNotMountPoint(targetPath)
+	if err != nil {
+		// Check if target doesn't exist yet (which is fine, we just created it)
+		exists, existsErr := afs.Exists(targetPath)
+		if existsErr != nil || !exists {
+			notMnt = true // Treat as not mounted if target doesn't exist
+		} else {
+			return status.Errorf(codes.Internal, "bindMount: failed to check mount point: %v", err)
 		}
-		slog.Error("bindMount: failed to mount", "error", err, "host_path", hostPath, "target_path", targetPath)
-		return status.Errorf(codes.Internal, "bindMount: failed to mount: %v", err)
+	}
+
+	// Perform bind mount if not already mounted
+	if notMnt {
+		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
+			slog.Error("bindMount: failed to mount", "error", err, "host_path", hostPath, "target_path", targetPath)
+			return status.Errorf(codes.Internal, "bindMount: failed to mount: %v", err)
+		}
+	} else {
+		slog.Info("bindMount: already mounted, skipping", "target_path", targetPath)
 	}
 
 	slog.Info("bindMount: successfully mounted", "host_path", hostPath, "target_path", targetPath)
 	return nil
 }
 
-// isMountAlreadyExists checks if the error indicates the mount point is already mounted
-func isMountAlreadyExists(err error) bool {
-	// mount returns "already mounted" or similar when trying to mount to an existing mount point
-	return err != nil && (strings.Contains(err.Error(), "already mounted") ||
-		strings.Contains(err.Error(), "busy"))
-}
-
 // bindUnmount unmounts the target path and removes it.
 // Returns nil if target doesn't exist or unmount succeeds.
-func bindUnmount(mounter mount.Interface, targetPath string) error {
+func bindUnmount(afs afero.Afero, mounter mount.Interface, targetPath string) error {
+	slog.Info("bindUnmount: unmounting", "target_path", targetPath)
+
 	// Check if target exists
-	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
+	exists, err := afs.Exists(targetPath)
+	if err != nil {
+		return status.Errorf(codes.Internal, "bindUnmount: failed to check if target exists: %v", err)
+	}
+	if !exists {
 		slog.Info("bindUnmount: target path does not exist, nothing to unmount", "target_path", targetPath)
 		return nil
 	}
 
-	// Always attempt to unmount - IsLikelyNotMountPoint is unreliable for bind mounts (see comment in bindMount)
+	// Always attempt to unmount - IsLikelyNotMountPoint is unreliable for bind mounts
+	// (See https://github.com/kubernetes/utils/blob/914a6e7505707ae6d13abe19730c24b4cfde9e6f/mount/mount.go#L59-L60)
 	if err := mounter.Unmount(targetPath); err != nil {
 		slog.Error("bindUnmount: failed to unmount", "error", err, "target_path", targetPath)
-		return status.Errorf(codes.Internal, "bindUnmount: failed to unmount %q: %v", targetPath, err)
 	}
 
-	// Remove the target path
-	if err := os.RemoveAll(targetPath); err != nil {
-		return status.Errorf(codes.Internal, "bindUnmount: failed to remove target path %q: %v", targetPath, err)
+	// Try to remove the target path
+	if err := afs.RemoveAll(targetPath); err != nil {
+		slog.Info("bindUnmount: failed to remove target path, Kubernetes will clean it up", "error", err, "target_path", targetPath)
 	}
 
 	slog.Info("bindUnmount: successfully unmounted", "target_path", targetPath)

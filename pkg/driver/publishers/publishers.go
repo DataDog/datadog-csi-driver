@@ -59,6 +59,6 @@ func GetPublishers(
 		newLocalLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 
 		// Fallback unmount handler for all Unpublish requests
-		newUnmountPublisher(mounter),
+		newUnmountPublisher(fs, mounter),
 	)
 }
