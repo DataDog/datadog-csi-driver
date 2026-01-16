@@ -30,6 +30,7 @@ spec:
   - name: dd-library-volume
     csi:
       driver: k8s.csi.datadoghq.com
+      readOnly: true
       volumeAttributes:
         type: DatadogLibrary
         dd.csi.datadog.com/library.package: dd-lib-php-init

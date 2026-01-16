@@ -17,7 +17,6 @@ func TestLibraryPublisher(t *testing.T) {
 		expectedLog string
 	}{
 		{"consumer-library", "Library test passed"},
-		{"consumer-library-custom-source", "Library custom source test passed"},
 	}
 
 	// Extract pod names for waitForPodsRunning

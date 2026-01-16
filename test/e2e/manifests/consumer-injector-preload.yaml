@@ -26,6 +26,7 @@ spec:
   - name: dd-preload-volume
     csi:
       driver: k8s.csi.datadoghq.com
+      readOnly: true
       volumeAttributes:
         type: DatadogInjectorPreload
 
