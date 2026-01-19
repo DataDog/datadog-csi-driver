@@ -23,7 +23,7 @@ const (
 	keyLibraryRegistry = "dd.csi.datadog.com/library.registry"
 	keyLibraryVersion  = "dd.csi.datadog.com/library.version"
 
-	// Ssource path inside the OCI images
+	// Source path inside the OCI images
 	languageLibrarySourcePath = "/datadog-init/package"
 	injectorLibrarySourcePath = "/opt/datadog-packages/datadog-apm-inject"
 )
