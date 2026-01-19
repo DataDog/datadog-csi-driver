@@ -53,6 +53,11 @@ func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*
 		return nil, nil // Not our volume
 	}
 
+	// Defensive code: injector preload volumes must be mounted in read-only mode to protect the shared store
+	if !req.GetReadonly() {
+		return &PublisherResponse{VolumeType: DatadogInjectorPreload}, fmt.Errorf("injector preload volumes must be mounted in read-only mode")
+	}
+
 	targetPath := req.GetTargetPath()
 
 	// Ensure the preload file exists

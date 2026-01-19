@@ -53,6 +53,24 @@ func TestInjectorPreloadPublisher_Publish_TypeSelection(t *testing.T) {
 	}
 }
 
+func TestInjectorPreloadPublisher_Publish_RejectsNonReadOnly(t *testing.T) {
+	publisher := &injectorPreloadPublisher{}
+
+	req := &csi.NodePublishVolumeRequest{
+		VolumeId:      "test-volume",
+		TargetPath:    "/target/ld.so.preload",
+		Readonly:      false, // Should be rejected
+		VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
+	}
+
+	resp, err := publisher.Publish(req)
+
+	assert.NotNil(t, resp, "response should be non-nil for metrics")
+	assert.Equal(t, DatadogInjectorPreload, resp.VolumeType)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "must be mounted in read-only mode")
+}
+
 func TestInjectorPreloadPublisher_Publish_Success(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
@@ -169,4 +187,3 @@ func TestInjectorPreloadPublisher_Unpublish_DelegatesToUnmount(t *testing.T) {
 	assert.Nil(t, resp, "injectorPreload should delegate Unpublish to unmountPublisher")
 	assert.NoError(t, err)
 }
-

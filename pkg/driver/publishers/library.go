@@ -43,6 +43,11 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 		return nil, nil // Not our volume
 	}
 
+	// Defensive code: library volumes must be mounted in read-only mode to protect the shared store
+	if !req.GetReadonly() {
+		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("library volumes must be mounted in read-only mode")
+	}
+
 	libraryPath, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
 	if err != nil {
 		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: image}, err
@@ -74,7 +79,7 @@ func (s libraryPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest) (*Publi
 
 	// Unmount the library from the target path
 	targetPath := req.GetTargetPath()
-	err = bindUnmount(s.mounter, targetPath)
+	err = bindUnmount(s.fs, s.mounter, targetPath)
 	if err != nil {
 		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: ""},
 			fmt.Errorf("failed to unmount library: %w", err)
