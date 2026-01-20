@@ -9,11 +9,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	log "log/slog"
 	"path/filepath"
 	"time"
 
 	"github.com/spf13/afero"
-	log "log/slog"
 )
 
 const (
@@ -42,6 +42,8 @@ type LibraryManager struct {
 	db *Database
 	// locker is used to synchronize access to the library manager.
 	locker *Locker
+	// cleanupStrategy defines how unused libraries are cleaned up.
+	cleanupStrategy CleanupStrategy
 	// scratchDir is the directory used for scratch download space for libraries.
 	scratchDir string
 }
@@ -63,15 +65,24 @@ func WithDownloader(d *Downloader) LibraryManagerOption {
 	}
 }
 
+// WithCleanupStrategy sets the cleanup strategy to use.
+// If not set, ImmediateCleanupStrategy is used by default.
+func WithCleanupStrategy(s CleanupStrategy) LibraryManagerOption {
+	return func(lm *LibraryManager) {
+		lm.cleanupStrategy = s
+	}
+}
+
 // NewLibraryManager creates a new library manager with all of the required dependencies.
 // The basePath is required as an absolute path (rather than using afero.NewBasePathFs) because
 // bind mounts need absolute paths.
 func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryManager, error) {
 	// Create manager with defaults.
 	lm := &LibraryManager{
-		fs:         afero.Afero{Fs: afero.NewOsFs()},
-		downloader: NewDownloader(),
-		locker:     NewLocker(),
+		fs:              afero.Afero{Fs: afero.NewOsFs()},
+		downloader:      NewDownloader(),
+		locker:          NewLocker(),
+		cleanupStrategy: NewImmediateCleanupStrategy(),
 	}
 
 	// Apply options.
@@ -116,6 +127,7 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 
 // Stop ensures all dependencies are stopped correctly.
 func (lm *LibraryManager) Stop() error {
+	lm.cleanupStrategy.Stop()
 	return lm.db.Close()
 }
 
@@ -197,31 +209,37 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 		return fmt.Errorf("could not determine which library was linked for volume %s: %w", volumeID, err)
 	}
 
-	// Lock the package.
-	lm.locker.Lock(libraryID)
-	defer lm.locker.Unlock(libraryID)
-
 	// Unlink the volume from the database.
+	// Note: No lock needed here because:
+	// - UnlinkVolume is atomic (database has its own locking)
+	// - tryCleanupLibrary acquires the lock before checking and removing
 	err = lm.db.UnlinkVolume(libraryID, volumeID)
 	if err != nil {
 		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
 	}
 
-	// If there are no other linked libraries, remove it from disk.
-	count, err := lm.db.GetVolumeCount(libraryID)
-	if err != nil {
-		return fmt.Errorf("could not get linked library count")
-	}
-	if count == 0 {
-		log.Info("No more volumes using library, removing from disk", "library_id", libraryID)
-		err = lm.store.Remove(libraryID)
-		if err != nil {
-			return err
-		}
-		log.Info("Library removed from disk", "library_id", libraryID)
-	} else {
-		log.Info("Library still used by volumes, keeping on disk", "library_id", libraryID, "count", count)
-	}
+	// Schedule cleanup - tryCleanupLibrary will check if the library is still in use
+	lm.cleanupStrategy.ScheduleCleanup(libraryID, lm.tryCleanupLibrary)
 
 	return nil
+}
+
+// tryCleanupLibrary attempts to remove a library from disk if it's no longer in use.
+// It acquires the lock and checks the volume count before removing.
+func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
+	// Acquire lock to prevent race with GetLibraryForVolume
+	lm.locker.Lock(libraryID)
+	defer lm.locker.Unlock(libraryID)
+
+	// Check if the library is still in use
+	count, err := lm.db.GetVolumeCount(libraryID)
+	if err != nil {
+		return fmt.Errorf("could not get linked library count: %w", err)
+	}
+	if count > 0 {
+		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
+		return nil
+	}
+	log.Info("Removing library from disk", "library_id", libraryID)
+	return lm.store.Remove(libraryID)
 }
