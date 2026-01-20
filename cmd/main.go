@@ -28,6 +28,7 @@ func init() {
 	pflag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
 	pflag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
 	pflag.String("storage-path", "/var/lib/datadog-csi-driver", "Base path for CSI driver storage")
+	pflag.Bool("disable-ssi", false, "Disable SSI publishers (library and injector preload)")
 
 	// Parse flags
 	pflag.Parse()

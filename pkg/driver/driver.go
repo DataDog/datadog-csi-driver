@@ -36,11 +36,14 @@ func (driver *DatadogCSIDriver) Version() string {
 
 // Stop ensures all dependencies are stopped correctly.
 func (driver *DatadogCSIDriver) Stop() error {
-	return driver.libraryManager.Stop()
+	if driver.libraryManager != nil {
+		return driver.libraryManager.Stop()
+	}
+	return nil
 }
 
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string) (*DatadogCSIDriver, error) {
+func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string, disableSSI bool) (*DatadogCSIDriver, error) {
 	fs := afero.Afero{Fs: afero.NewOsFs()}
 	mounter := mount.New("")
 
@@ -49,16 +52,20 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBase
 		return nil, fmt.Errorf("failed to create storage base path: %w", err)
 	}
 
-	lm, err := librarymanager.NewLibraryManager(storageBasePath)
-	if err != nil {
-		return nil, err
+	var lm *librarymanager.LibraryManager
+	if !disableSSI {
+		var err error
+		lm, err = librarymanager.NewLibraryManager(storageBasePath)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &DatadogCSIDriver{
 		name:    name,
 		version: version,
 
-		publisher:      publishers.GetPublishers(fs, mounter, apmHostSocketPath, dsdHostSocketPath, storageBasePath, lm),
+		publisher:      publishers.GetPublishers(fs, mounter, apmHostSocketPath, dsdHostSocketPath, storageBasePath, lm, disableSSI),
 		libraryManager: lm,
 		fs:             fs,
 		mounter:        mounter,

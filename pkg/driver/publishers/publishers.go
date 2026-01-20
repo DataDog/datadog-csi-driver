@@ -6,6 +6,8 @@
 package publishers
 
 import (
+	"log/slog"
+
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -34,8 +36,8 @@ type Publisher interface {
 // GetPublishers returns a chain of publishers for handling CSI volume operations.
 //
 // The chain includes:
-//   - Library publisher (for DatadogLibrary volumes)
-//   - InjectorPreload publisher (for ld.so.preload injection)
+//   - Library publisher (for DatadogLibrary volumes) - only if ssiEnabled
+//   - InjectorPreload publisher (for ld.so.preload injection) - only if ssiEnabled
 //   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
 //   - Legacy publishers (for deprecated "mode/path" schema)
 //   - Fallback unmount handler for all Unpublish requests
@@ -44,12 +46,21 @@ func GetPublishers(
 	mounter mount.Interface,
 	apmSocketPath, dsdSocketPath, storageBasePath string,
 	libraryManager *librarymanager.LibraryManager,
+	disableSSI bool,
 ) Publisher {
-	return newChainPublisher(
-		// Order matters, the first publisher to return a response will stop the chain
-		newLibraryPublisher(fs, mounter, libraryManager),
-		newInjectorPreloadPublisher(fs, mounter, storageBasePath),
+	var pubs []Publisher
 
+	// SSI publishers (library and injector preload)
+	if disableSSI {
+		slog.Info("SSI publishers disabled (library and injector preload)")
+	} else {
+		pubs = append(pubs,
+			newLibraryPublisher(fs, mounter, libraryManager),
+			newInjectorPreloadPublisher(fs, mounter, storageBasePath),
+		)
+	}
+
+	pubs = append(pubs,
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 		newLocalPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
@@ -61,4 +72,6 @@ func GetPublishers(
 		// Fallback unmount handler for all Unpublish requests
 		newUnmountPublisher(fs, mounter),
 	)
+
+	return newChainPublisher(pubs...)
 }
