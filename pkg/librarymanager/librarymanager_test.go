@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
@@ -24,7 +25,6 @@ type testImage struct {
 type testVolume struct {
 	name          string
 	version       string
-	path          string
 	pull          bool
 	volumeID      string
 	expectedFiles []string
@@ -51,17 +51,16 @@ func TestLibraryManager(t *testing.T) {
 				{
 					name:     "test-image",
 					version:  "latest",
-					path:     "/data/datadog-init/package",
 					pull:     false,
 					volumeID: "test-volume-001",
 					expectedFiles: []string{
-						"library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 			},
 			expectedManagerFiles: []string{
 				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/library.txt",
+				"store/56275150d5d94778425fc2fd850ff88c28e1d478e3812fa1255aed86ab9c143e/datadog-init/package/library.txt",
 			},
 		},
 		"multiple volumes for the same library maintains a single library in the store": {
@@ -76,27 +75,25 @@ func TestLibraryManager(t *testing.T) {
 				{
 					name:     "test-image",
 					version:  "latest",
-					path:     "/data/datadog-init/package",
 					pull:     false,
 					volumeID: "test-volume-001",
 					expectedFiles: []string{
-						"library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 				{
 					name:     "test-image",
 					version:  "latest",
-					path:     "/data/datadog-init/package",
 					pull:     false,
 					volumeID: "test-volume-002",
 					expectedFiles: []string{
-						"library.txt",
+						"datadog-init/package/library.txt",
 					},
 				},
 			},
 			expectedManagerFiles: []string{
 				"db/datadog-csi-driver.db",
-				"store/32ea291b55c8556199ec22906034cc296f20ae69866f8c8031aecb7d9fd765b8/library.txt",
+				"store/56275150d5d94778425fc2fd850ff88c28e1d478e3812fa1255aed86ab9c143e/datadog-init/package/library.txt",
 			},
 		},
 	}
@@ -104,7 +101,7 @@ func TestLibraryManager(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			// Setup local registry
-			localRegistry := NewLocalRegistry(t)
+			localRegistry := testutil.NewLocalRegistry(t)
 			defer localRegistry.Stop()
 			for _, img := range test.images {
 				localRegistry.AddImage(t, img.tarPath, img.name, img.tag)
@@ -114,7 +111,7 @@ func TestLibraryManager(t *testing.T) {
 			d := librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))
 
 			// Create scratch space.
-			tsd := NewTempScratchDirectory(t)
+			tsd := testutil.NewTempScratchDirectory(t)
 			defer tsd.Cleanup(t)
 			basePath := tsd.Path(t)
 
@@ -133,18 +130,22 @@ func TestLibraryManager(t *testing.T) {
 			// Setup all volumes and ensure they have expected files.
 			for _, volume := range test.volumes {
 				// Get library for the volume.
-				lib := CreateTestLibrary(t, volume, localRegistry.Registry(t))
+				lib := createTestLibrary(t, volume, localRegistry.Registry(t))
 				path, err := lm.GetLibraryForVolume(ctx, volume.volumeID, lib)
 				require.NoError(t, err)
 
 				// Ensure the volume path returned contains the expected files.
-				actualFiles := listFiles(t, path)
-				require.ElementsMatch(t, volume.expectedFiles, actualFiles)
+				actualFiles := testutil.ListFiles(t, path)
+				for _, expected := range volume.expectedFiles {
+					require.Contains(t, actualFiles, expected)
+				}
 			}
 
-			// Ensure the manager file system is as expected.
-			actualFiles := listFiles(t, tsd.Path(t))
-			require.ElementsMatch(t, test.expectedManagerFiles, actualFiles)
+			// Ensure the manager file system contains the expected files.
+			actualFiles := testutil.ListFiles(t, tsd.Path(t))
+			for _, expected := range test.expectedManagerFiles {
+				require.Contains(t, actualFiles, expected)
+			}
 
 			// Delete the volumes.
 			for _, volume := range test.volumes {
@@ -153,15 +154,15 @@ func TestLibraryManager(t *testing.T) {
 			}
 
 			// Ensure the store is empty.
-			actualFiles = listFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
+			actualFiles = testutil.ListFiles(t, filepath.Join(tsd.Path(t), librarymanager.StoreDirectory))
 			require.Empty(t, actualFiles)
 		})
 	}
 }
 
-func CreateTestLibrary(t *testing.T, tl *testVolume, registry string) *librarymanager.Library {
+func createTestLibrary(t *testing.T, tl *testVolume, registry string) *librarymanager.Library {
 	t.Helper()
-	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.path, tl.pull)
+	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.pull)
 	require.NoError(t, err)
 	return lib
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/spf13/afero"
+	log "log/slog"
 )
 
 const (
@@ -118,6 +119,15 @@ func (lm *LibraryManager) Stop() error {
 	return lm.db.Close()
 }
 
+// HasVolume returns true if the volume is managed by the library manager.
+func (lm *LibraryManager) HasVolume(volumeID string) (bool, error) {
+	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
+	if err != nil {
+		return false, err
+	}
+	return libraryID != "", nil
+}
+
 // GetLibraryForVolume fetches the remote library if it doesn't exist, records its usage, and returns the path on disk
 // that can be mounted for the volume.
 func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID string, lib *Library) (string, error) {
@@ -129,7 +139,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", fmt.Errorf("library cannot be nil")
 	}
 
-	// Fetch the library ID.
+	// Fetch the library ID based on the image digest.
 	libraryID, err := lm.cache.FetchDigest(ctx, lib.Image(), lib.Pull())
 	if err != nil {
 		return "", fmt.Errorf("could not determine library ID: %w", err)
@@ -151,6 +161,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	if path != "" {
+		log.Info("Library already cached", "image", lib.Image(), "path", path)
 		return path, nil
 	}
 
@@ -162,13 +173,19 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	defer lm.fs.RemoveAll(scratch)
 
 	// Download the library into the scratch space.
-	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), lib.Source(), scratch)
+	log.Info("Downloading library", "image", lib.Image())
+	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}
 
 	// Copy the library into the store.
-	return lm.store.Add(libraryID, scratch)
+	storePath, err := lm.store.Add(libraryID, scratch)
+	if err != nil {
+		return "", err
+	}
+	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
+	return storePath, nil
 }
 
 // RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
@@ -196,7 +213,14 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 		return fmt.Errorf("could not get linked library count")
 	}
 	if count == 0 {
-		return lm.store.Remove(libraryID)
+		log.Info("No more volumes using library, removing from disk", "library_id", libraryID)
+		err = lm.store.Remove(libraryID)
+		if err != nil {
+			return err
+		}
+		log.Info("Library removed from disk", "library_id", libraryID)
+	} else {
+		log.Info("Library still used by volumes, keeping on disk", "library_id", libraryID, "count", count)
 	}
 
 	return nil

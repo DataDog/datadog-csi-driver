@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
@@ -17,28 +18,6 @@ import (
 
 func testFs() afero.Afero {
 	return afero.Afero{Fs: afero.NewOsFs()}
-}
-
-type TempScratchDirectory struct {
-	path string
-}
-
-func NewTempScratchDirectory(t *testing.T) *TempScratchDirectory {
-	testPath, err := os.MkdirTemp("", "csi-driver-test-*")
-	require.NoError(t, err, "could not setup destination dir for the test")
-	return &TempScratchDirectory{
-		path: testPath,
-	}
-}
-
-func (tsd *TempScratchDirectory) Path(t *testing.T) string {
-	return tsd.path
-}
-
-func (tsd *TempScratchDirectory) Cleanup(t *testing.T) {
-	t.Helper()
-	err := os.RemoveAll(tsd.path)
-	require.NoError(t, err, "could not clean up scratch space")
 }
 
 func TestNewStore(t *testing.T) {
@@ -68,7 +47,7 @@ func TestNewStore(t *testing.T) {
 			}
 
 			// Create scratch space.
-			tsd := NewTempScratchDirectory(t)
+			tsd := testutil.NewTempScratchDirectory(t)
 			defer tsd.Cleanup(t)
 
 			// Optionally create the base directory.
@@ -96,7 +75,7 @@ func TestNewStore(t *testing.T) {
 
 func TestStore(t *testing.T) {
 	// Create scratch space.
-	tsd := NewTempScratchDirectory(t)
+	tsd := testutil.NewTempScratchDirectory(t)
 	defer tsd.Cleanup(t)
 
 	basePath := filepath.Join(tsd.Path(t), "base-path")

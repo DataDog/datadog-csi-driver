@@ -14,12 +14,11 @@ type Library struct {
 	name     string
 	registry string
 	version  string
-	path     string
 	pull     bool
 }
 
 // NewLibrary instatiates a new library from the provided fields and ensures they are valid.
-func NewLibrary(name string, registry string, version string, path string, pull bool) (*Library, error) {
+func NewLibrary(name string, registry string, version string, pull bool) (*Library, error) {
 	if name == "" {
 		return nil, fmt.Errorf("name must be provided and cannot be empty")
 	}
@@ -29,15 +28,11 @@ func NewLibrary(name string, registry string, version string, path string, pull 
 	if version == "" {
 		return nil, fmt.Errorf("version must be provided and cannot be empty")
 	}
-	if path == "" {
-		return nil, fmt.Errorf("path must be provided and cannot be empty")
-	}
 
 	return &Library{
 		name:     name,
 		registry: registry,
 		version:  version,
-		path:     path,
 		pull:     pull,
 	}, nil
 }
@@ -45,11 +40,6 @@ func NewLibrary(name string, registry string, version string, path string, pull 
 // Pull returns if this library should be pulled or not based on the pull policy.
 func (l *Library) Pull() bool {
 	return l.pull
-}
-
-// Source provides the path inside the container image to extract.
-func (l *Library) Source() string {
-	return l.path
 }
 
 // Image provides a container image path pullable by crane.

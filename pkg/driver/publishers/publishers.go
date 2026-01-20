@@ -6,6 +6,7 @@
 package publishers
 
 import (
+	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
 	"k8s.io/utils/mount"
@@ -31,15 +32,23 @@ type Publisher interface {
 }
 
 // GetPublishers returns a chain of publishers for handling CSI volume operations.
-// The apmSocketPath and dsdSocketPath are the paths to the Datadog agent sockets.
 //
 // The chain includes:
+//   - Library publisher (for DatadogLibrary volumes)
+//   - InjectorPreload publisher (for ld.so.preload injection)
 //   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
 //   - Legacy publishers (for deprecated "mode/path" schema)
 //   - Fallback unmount handler for all Unpublish requests
-func GetPublishers(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSocketPath string) Publisher {
+func GetPublishers(
+	fs afero.Afero,
+	mounter mount.Interface,
+	apmSocketPath, dsdSocketPath, storageBasePath string,
+	libraryManager *librarymanager.LibraryManager,
+) Publisher {
 	return newChainPublisher(
 		// Order matters, the first publisher to return a response will stop the chain
+		newLibraryPublisher(fs, mounter, libraryManager),
+		newInjectorPreloadPublisher(fs, mounter, storageBasePath),
 
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
@@ -50,6 +59,6 @@ func GetPublishers(fs afero.Afero, mounter mount.Interface, apmSocketPath, dsdSo
 		newLocalLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 
 		// Fallback unmount handler for all Unpublish requests
-		newUnmountPublisher(mounter),
+		newUnmountPublisher(fs, mounter),
 	)
 }

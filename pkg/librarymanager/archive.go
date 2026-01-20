@@ -20,6 +20,7 @@ import (
 // ArchiveExtractor extracts directories from a tar archive.
 type ArchiveExtractor struct {
 	src    string
+	dst    string      // Absolute path to destination (needed for symlinks, as afero doesn't support them)
 	dstFs  afero.Afero // BasePathFs rooted at destination
 	format archives.Tar
 }
@@ -34,6 +35,7 @@ func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtra
 	baseFs := afero.NewBasePathFs(afs.Fs, destination)
 	return &ArchiveExtractor{
 		src:    filepath.Clean("/" + src),
+		dst:    destination,
 		dstFs:  afero.Afero{Fs: baseFs},
 		format: archives.Tar{},
 	}, nil
@@ -70,6 +72,30 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 	switch {
 	case mode.IsDir():
 		return fp.dstFs.Mkdir(destPath, 0o755)
+	case mode&os.ModeSymlink != 0:
+		// Handle symbolic links.
+		// Some packages use symlinks (e.g., dd-lib-python-init for deduplication, apm-inject for versioning).
+		// We preserve them as-is because once bind-mounted in a pod, symlinks resolve within the
+		// container's filesystem namespace, not the host's.
+		linkTarget := f.LinkTarget
+		if linkTarget == "" {
+			return fmt.Errorf("symlink %s has no target", destPath)
+		}
+		fullDestPath := filepath.Clean(filepath.Join(fp.dst, destPath))
+		// Verify the path stays within the destination root
+		if !strings.HasPrefix(fullDestPath, fp.dst+string(filepath.Separator)) {
+			return fmt.Errorf("symlink path %q escapes destination directory", destPath)
+		}
+		// Create the symlink in the destination.
+		// Note: afero does not support symlinks, so we use os.Symlink directly.
+		if err := os.Symlink(linkTarget, fullDestPath); err != nil {
+			// If symlink already exists with the same target, ignore the error
+			if existing, readErr := os.Readlink(fullDestPath); readErr == nil && existing == linkTarget {
+				return nil
+			}
+			return fmt.Errorf("could not create symlink %s -> %s: %w", destPath, linkTarget, err)
+		}
+		return nil
 	case mode.IsRegular():
 		in, err := f.Open()
 		if err != nil {
