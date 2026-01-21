@@ -18,8 +18,8 @@ import (
 )
 
 const (
-	// defaultCleanupDelay is the default delay before cleaning up unused libraries.
-	defaultCleanupDelay = 15 * time.Minute
+	// cleanupDelay is the delay before cleaning up unused libraries.
+	cleanupDelay = 15 * time.Minute
 )
 
 // DatadogCSIDriver is datadog CSI driver implementing CSI Node and Identity Server
@@ -57,7 +57,7 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBase
 
 	lm, err := librarymanager.NewLibraryManager(
 		storageBasePath,
-		librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(defaultCleanupDelay)),
+		librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
 	)
 	if err != nil {
 		return nil, err
