@@ -6,7 +6,7 @@
 package librarymanager
 
 import (
-	"log/slog"
+	log "log/slog"
 	"sync"
 	"time"
 )
@@ -36,9 +36,9 @@ func NewImmediateCleanupStrategy() *ImmediateCleanupStrategy {
 }
 
 func (s *ImmediateCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc CleanupFunc) {
-	slog.Info("ImmediateCleanup: executing cleanup", "library_id", libraryID)
+	log.Debug("ImmediateCleanup: executing cleanup", "library_id", libraryID)
 	if err := cleanupFunc(libraryID); err != nil {
-		slog.Error("ImmediateCleanup: cleanup failed", "library_id", libraryID, "error", err)
+		log.Error("ImmediateCleanup: cleanup failed", "library_id", libraryID, "error", err)
 	}
 }
 
@@ -76,9 +76,9 @@ func (s *DelayedCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc C
 
 	if s.stopped {
 		// If stopped, execute immediately
-		slog.Info("DelayedCleanup: strategy stopped, executing cleanup immediately", "library_id", libraryID)
+		log.Info("DelayedCleanup: strategy stopped, executing cleanup immediately", "library_id", libraryID)
 		if err := cleanupFunc(libraryID); err != nil {
-			slog.Error("DelayedCleanup: cleanup failed", "library_id", libraryID, "error", err)
+			log.Error("DelayedCleanup: cleanup failed", "library_id", libraryID, "error", err)
 		}
 		return
 	}
@@ -89,7 +89,7 @@ func (s *DelayedCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc C
 		delete(s.pending, libraryID)
 	}
 
-	slog.Info("DelayedCleanup: scheduling cleanup", "library_id", libraryID, "delay", s.delay)
+	log.Debug("DelayedCleanup: scheduling cleanup", "library_id", libraryID, "delay", s.delay)
 
 	timer := time.AfterFunc(s.delay, func() {
 		s.mu.Lock()
@@ -101,9 +101,9 @@ func (s *DelayedCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc C
 		delete(s.pending, libraryID)
 		s.mu.Unlock()
 
-		slog.Info("DelayedCleanup: executing scheduled cleanup", "library_id", libraryID)
+		log.Debug("DelayedCleanup: executing scheduled cleanup", "library_id", libraryID)
 		if err := cleanupFunc(libraryID); err != nil {
-			slog.Error("DelayedCleanup: cleanup failed", "library_id", libraryID, "error", err)
+			log.Error("DelayedCleanup: cleanup failed", "library_id", libraryID, "error", err)
 		}
 	})
 
@@ -125,9 +125,9 @@ func (s *DelayedCleanupStrategy) Stop() {
 	// Execute all pending cleanups immediately
 	for libraryID, pending := range s.pending {
 		pending.timer.Stop()
-		slog.Info("DelayedCleanup: stop - executing pending cleanup", "library_id", libraryID)
+		log.Debug("DelayedCleanup: stop - executing pending cleanup", "library_id", libraryID)
 		if err := pending.cleanupFunc(libraryID); err != nil {
-			slog.Error("DelayedCleanup: cleanup failed during stop", "library_id", libraryID, "error", err)
+			log.Error("DelayedCleanup: cleanup failed during stop", "library_id", libraryID, "error", err)
 		}
 	}
 	s.pending = make(map[string]*pendingCleanup)
