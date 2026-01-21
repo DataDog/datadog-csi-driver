@@ -33,19 +33,18 @@ func (d *DatadogCSIDriver) NodePublishVolume(_ context.Context, req *csi.NodePub
 
 	resp, err := d.publisher.Publish(req)
 	if err != nil {
-		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusFailed)
+		volumeCtx := req.GetVolumeContext()
+		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusFailed)
 		return nil, fmt.Errorf("failed to publish volume: %v", err)
 	}
 
-	// Not all publishers support all volume types, so we don't return an error if resp is nil
 	if resp == nil {
-		log.Warn("publish volume request not supported by any publisher")
 		volumeCtx := req.GetVolumeContext()
 		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusUnsupported)
-	} else {
-		metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
+		return nil, fmt.Errorf("unsupported volume type: %q", volumeCtx["type"])
 	}
 
+	metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
 	return &csi.NodePublishVolumeResponse{}, nil
 }
 
@@ -60,13 +59,11 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(_ context.Context, req *csi.NodeU
 		return nil, fmt.Errorf("failed to unpublish volume: %v", err)
 	}
 
-	// Not all publishers support all volume types, so we don't return an error if resp is nil
 	if resp == nil {
-		log.Warn("unpublish volume request not supported by any publisher")
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusUnsupported)
-	} else {
-		metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
+		return nil, fmt.Errorf("unpublish volume request not supported by any publisher")
 	}
 
+	metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
 	return &csi.NodeUnpublishVolumeResponse{}, nil
 }
