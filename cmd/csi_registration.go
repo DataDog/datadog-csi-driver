@@ -38,6 +38,15 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 	// Log the version
 	log.Info("Created Datadog CSI Driver", "version", csiDriver.Version())
 
+	// Publish driver configuration to ConfigMap for discovery by other components
+	if err := driver.PublishConfigMap(ctx, driver.DriverConfig{
+		Version:    Version,
+		SSIEnabled: !viper.GetBool("disable-ssi"),
+	}); err != nil {
+		log.Warn("Failed to publish driver config to ConfigMap", "error", err)
+		// Don't fail startup, this is not critical
+	}
+
 	// Setup grpc server
 	// TODO: check if it is necessary to use TLS in the grpc server
 	grpcServer := grpc.NewServer()
