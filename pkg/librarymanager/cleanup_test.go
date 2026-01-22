@@ -148,9 +148,14 @@ func TestDelayedCleanupStrategy_ConcurrentAccess(t *testing.T) {
 		}()
 	}
 
-	// Wait for all goroutines
+	// Wait for all goroutines with timeout
+	timeout := time.After(5 * time.Second)
 	for i := 0; i < numGoroutines; i++ {
-		<-done
+		select {
+		case <-done:
+		case <-timeout:
+			t.Fatalf("timeout waiting for goroutine %d/%d to complete", i+1, numGoroutines)
+		}
 	}
 
 	// Wait for any pending cleanup
