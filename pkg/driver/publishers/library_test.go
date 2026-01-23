@@ -65,6 +65,29 @@ func TestLibraryPublisher_Publish_TypeSelection(t *testing.T) {
 	}
 }
 
+func TestLibraryPublisher_Publish_DisabledRejectsRequest(t *testing.T) {
+	publisher := libraryPublisher{disabled: true}
+
+	req := &csi.NodePublishVolumeRequest{
+		VolumeId:   "test-volume",
+		TargetPath: "/target/path",
+		Readonly:   true,
+		VolumeContext: map[string]string{
+			"type":                                "DatadogLibrary",
+			"dd.csi.datadog.com/library.package":  "test-image",
+			"dd.csi.datadog.com/library.registry": "gcr.io/example",
+			"dd.csi.datadog.com/library.version":  "v1.0.0",
+		},
+	}
+
+	resp, err := publisher.Publish(req)
+
+	assert.NotNil(t, resp, "response should be non-nil for metrics")
+	assert.Equal(t, DatadogLibrary, resp.VolumeType)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "SSI is disabled")
+}
+
 func TestLibraryPublisher_Publish_RejectsNonReadOnly(t *testing.T) {
 	publisher := libraryPublisher{}
 
