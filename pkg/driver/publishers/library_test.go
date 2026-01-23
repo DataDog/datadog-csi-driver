@@ -152,7 +152,7 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 
 	// Create publisher
 	mounter := mount.NewFakeMounter(nil)
-	publisher := newLibraryPublisher(fs, mounter, lm)
+	publisher := newLibraryPublisher(fs, mounter, lm, false)
 
 	// Create target directory
 	targetPath := filepath.Join(t.TempDir(), "target", "library")
@@ -205,7 +205,7 @@ func TestLibraryPublisher_Unpublish_Success(t *testing.T) {
 
 	// Create publisher
 	mounter := mount.NewFakeMounter(nil)
-	publisher := newLibraryPublisher(fs, mounter, lm)
+	publisher := newLibraryPublisher(fs, mounter, lm, false)
 
 	// First, publish a volume
 	targetPath := filepath.Join(t.TempDir(), "target", "library")

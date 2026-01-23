@@ -75,7 +75,7 @@ func TestInjectorPreloadPublisher_Publish_Success(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume",
@@ -110,7 +110,7 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume-1",
@@ -146,7 +146,7 @@ func TestInjectorPreloadPublisher_Publish_Concurrent(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)

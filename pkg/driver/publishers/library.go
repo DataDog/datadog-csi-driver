@@ -34,6 +34,8 @@ type libraryPublisher struct {
 	fs             afero.Afero
 	mounter        mount.Interface
 	libraryManager *librarymanager.LibraryManager
+	// disabled indicates if SSI is disabled (publish requests will be rejected)
+	disabled bool
 }
 
 // Publish downloads the library from the OCI registry if needed and bind-mounts it to the target path.
@@ -41,6 +43,11 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 	volumeCtx := req.GetVolumeContext()
 	if VolumeType(volumeCtx["type"]) != DatadogLibrary {
 		return nil, nil // Not our volume
+	}
+
+	// Reject publish requests if SSI is disabled
+	if s.disabled {
+		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("SSI is disabled, library volumes cannot be published")
 	}
 
 	// Defensive code: library volumes must be mounted in read-only mode to protect the shared store
@@ -126,6 +133,6 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	return path, lib.Image(), nil
 }
 
-func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager) Publisher {
-	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager}
+func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool) Publisher {
+	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled}
 }

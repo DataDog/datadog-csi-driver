@@ -6,8 +6,6 @@
 package publishers
 
 import (
-	"log/slog"
-
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -36,8 +34,8 @@ type Publisher interface {
 // GetPublishers returns a chain of publishers for handling CSI volume operations.
 //
 // The chain includes:
-//   - Library publisher (for DatadogLibrary volumes) - only if ssiEnabled
-//   - InjectorPreload publisher (for ld.so.preload injection) - only if ssiEnabled
+//   - Library publisher (for DatadogLibrary volumes)
+//   - InjectorPreload publisher (for ld.so.preload injection)
 //   - Socket/Local publishers (for "type" schema: APMSocket, APMSocketDirectory, etc.)
 //   - Legacy publishers (for deprecated "mode/path" schema)
 //   - Fallback unmount handler for all Unpublish requests
@@ -48,19 +46,12 @@ func GetPublishers(
 	libraryManager *librarymanager.LibraryManager,
 	disableSSI bool,
 ) Publisher {
-	var pubs []Publisher
+	// Order matters, the first publisher to return a response will stop the chain
+	return newChainPublisher(
+		// SSI publishers (library and injector preload)
+		newLibraryPublisher(fs, mounter, libraryManager, disableSSI),
+		newInjectorPreloadPublisher(fs, mounter, storageBasePath, disableSSI),
 
-	// SSI publishers (library and injector preload)
-	if disableSSI {
-		slog.Info("SSI publishers disabled (library and injector preload)")
-	} else {
-		pubs = append(pubs,
-			newLibraryPublisher(fs, mounter, libraryManager),
-			newInjectorPreloadPublisher(fs, mounter, storageBasePath),
-		)
-	}
-
-	pubs = append(pubs,
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 		newLocalPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
@@ -69,9 +60,7 @@ func GetPublishers(
 		newSocketLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 		newLocalLegacyPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 
-		// Fallback unmount handler for all Unpublish requests
+		// Fallback unmount handler for most Unpublish requests
 		newUnmountPublisher(fs, mounter),
 	)
-
-	return newChainPublisher(pubs...)
 }
