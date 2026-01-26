@@ -29,9 +29,10 @@ func init() {
 	pflag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
 	pflag.String("storage-path", "/var/lib/datadog-csi-driver", "Base path for CSI driver storage")
 
-	// Disable SSI publishers (library and injector preload)
-	// Publish requests will be rejected if SSI is disabled, but Unpublish requests will still be handled.
-	pflag.Bool("disable-ssi", false, "Disable SSI publishers (library and injector preload)")
+	// Enable APM/SSI publishers (library and injector preload)
+	// When disabled, publish requests will be rejected but unpublish requests will still be handled.
+	// Env var: DD_APM_ENABLED
+	pflag.Bool("apm-enabled", true, "Enable APM/SSI publishers (library and injector preload)")
 
 	// Parse flags
 	pflag.Parse()
