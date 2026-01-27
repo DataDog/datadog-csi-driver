@@ -31,6 +31,9 @@ e2e_tests:
   image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_x64:v66293343-2eef00c4
   tags:
     - docker-in-docker:amd64
+  variables:
+    # Prevent Go from trying to download toolchain in network-isolated environment
+    GOTOOLCHAIN: local
   before_script:
     - apt-get update && apt-get install -y bash curl
     - curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
