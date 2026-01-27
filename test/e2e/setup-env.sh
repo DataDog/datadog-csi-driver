@@ -33,9 +33,12 @@ helm repo update
 
 kubectl create namespace "$NAMESPACE" || true
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 helm upgrade --install "$HELM_RELEASE" datadog/datadog-csi-driver \
   --namespace "$NAMESPACE" \
   --wait \
+  --values "$SCRIPT_DIR/helm-values.yaml" \
   --set image.repository="datadog-csi-driver" \
   --set image.tag="dev" \
   --set image.pullPolicy=IfNotPresent \

@@ -1,0 +1,12 @@
+# Custom values for E2E tests
+#
+# TEMPORARY: This file can be removed once https://github.com/DataDog/helm-charts/pull/2266 is released.
+# That PR adds the storage-dir volume mount required by the library manager.
+#
+# Until then, we disable readOnlyRootFilesystem to allow the library manager
+# to create its storage directory at /var/lib/datadog-csi-driver.
+
+driver:
+  securityContext:
+    readOnlyRootFilesystem: false
+    privileged: true
