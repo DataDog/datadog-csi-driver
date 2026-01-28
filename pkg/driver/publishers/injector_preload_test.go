@@ -53,6 +53,24 @@ func TestInjectorPreloadPublisher_Publish_TypeSelection(t *testing.T) {
 	}
 }
 
+func TestInjectorPreloadPublisher_Publish_DisabledRejectsRequest(t *testing.T) {
+	publisher := &injectorPreloadPublisher{disabled: true}
+
+	req := &csi.NodePublishVolumeRequest{
+		VolumeId:      "test-volume",
+		TargetPath:    "/target/ld.so.preload",
+		Readonly:      true,
+		VolumeContext: map[string]string{"type": "DatadogInjectorPreload"},
+	}
+
+	resp, err := publisher.Publish(req)
+
+	assert.NotNil(t, resp, "response should be non-nil for metrics")
+	assert.Equal(t, DatadogInjectorPreload, resp.VolumeType)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "SSI is disabled")
+}
+
 func TestInjectorPreloadPublisher_Publish_RejectsNonReadOnly(t *testing.T) {
 	publisher := &injectorPreloadPublisher{}
 
@@ -75,7 +93,7 @@ func TestInjectorPreloadPublisher_Publish_Success(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume",
@@ -110,7 +128,7 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume-1",
@@ -146,7 +164,7 @@ func TestInjectorPreloadPublisher_Publish_Concurrent(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog")
+	publisher := newInjectorPreloadPublisher(fs, mounter, "/var/datadog", false)
 
 	var wg sync.WaitGroup
 	errors := make(chan error, 10)

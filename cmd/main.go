@@ -7,24 +7,45 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	log "log/slog"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
-var (
-	Version           = "dev" // This will be set when building the driver
-	driverNameFlag    = flag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
-	endpointFlag      = flag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
-	dsdHostSocketPath = flag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
-	apmHostSocketPath = flag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
-	storageBasePath   = flag.String("storage-path", "/var/lib/datadog-csi-driver", "Base path for CSI driver storage")
-)
+var Version = "dev" // This will be set when building the driver
+
+func init() {
+	// Define flags
+	pflag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
+	pflag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
+	pflag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
+	pflag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
+	pflag.String("storage-path", "/var/lib/datadog-csi-driver", "Base path for CSI driver storage")
+
+	// Enable APM/SSI publishers (library and injector preload)
+	// When disabled, publish requests will be rejected but unpublish requests will still be handled.
+	// Env var: DD_APM_ENABLED
+	pflag.Bool("apm-enabled", true, "Enable APM/SSI publishers (library and injector preload)")
+
+	// Parse flags
+	pflag.Parse()
+
+	// Bind flags to viper
+	viper.BindPFlags(pflag.CommandLine)
+
+	// Configure env var support
+	// DD_DRIVER_NAME, DD_CSI_ENDPOINT, DD_DSD_HOST_SOCKET_PATH, etc.
+	viper.SetEnvPrefix("DD")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	viper.AutomaticEnv()
+}
 
 // run creates and runs the metrics server and the csi driver grpc server
 // It can only return a non-nil error

@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	log "log/slog"
 	"net"
@@ -15,6 +14,7 @@ import (
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/utils"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/spf13/viper"
 	"google.golang.org/grpc"
 )
 
@@ -22,15 +22,13 @@ import (
 // This is a blocking operation.
 func registerAndStartCSIDriver(ctx context.Context) error {
 	// Create CSI driver
-
-	flag.Parse()
-
 	csiDriver, err := driver.NewDatadogCSIDriver(
-		*driverNameFlag,
-		*apmHostSocketPath,
-		*dsdHostSocketPath,
-		*storageBasePath,
+		viper.GetString("driver-name"),
+		viper.GetString("apm-host-socket-path"),
+		viper.GetString("dsd-host-socket-path"),
+		viper.GetString("storage-path"),
 		Version,
+		viper.GetBool("apm-enabled"),
 	)
 	if err != nil {
 		log.Error("Failed to create CSI driver", "error", err)
@@ -47,7 +45,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 	csi.RegisterNodeServer(grpcServer, csiDriver)
 
 	// Define unix socket listener
-	endpoint := *endpointFlag
+	endpoint := viper.GetString("csi-endpoint")
 	unixAddress, err := utils.EnsureSocketAvailability(endpoint)
 	if err != nil {
 		return fmt.Errorf("failed to listen on endpoint %q: %v", endpoint, err)

@@ -28,6 +28,8 @@ type injectorPreloadPublisher struct {
 	preloadFilePath string
 	// mu protects the check-and-create operation
 	mu sync.Mutex
+	// disabled indicates if SSI is disabled (publish requests will be rejected)
+	disabled bool
 }
 
 func (p *injectorPreloadPublisher) ensurePreloadFileExists() error {
@@ -51,6 +53,11 @@ func (p *injectorPreloadPublisher) Publish(req *csi.NodePublishVolumeRequest) (*
 	volumeCtx := req.GetVolumeContext()
 	if VolumeType(volumeCtx["type"]) != DatadogInjectorPreload {
 		return nil, nil // Not our volume
+	}
+
+	// Reject publish requests if SSI is disabled
+	if p.disabled {
+		return &PublisherResponse{VolumeType: DatadogInjectorPreload}, fmt.Errorf("SSI is disabled, injector preload volumes cannot be published")
 	}
 
 	// Defensive code: injector preload volumes must be mounted in read-only mode to protect the shared store
@@ -78,10 +85,11 @@ func (p *injectorPreloadPublisher) Unpublish(req *csi.NodeUnpublishVolumeRequest
 	return nil, nil // Handled by unmountPublisher
 }
 
-func newInjectorPreloadPublisher(fs afero.Afero, mounter mount.Interface, storageBasePath string) Publisher {
+func newInjectorPreloadPublisher(fs afero.Afero, mounter mount.Interface, storageBasePath string, disabled bool) Publisher {
 	return &injectorPreloadPublisher{
 		fs:              fs,
 		mounter:         mounter,
 		preloadFilePath: filepath.Join(storageBasePath, "ld.so.preload"),
+		disabled:        disabled,
 	}
 }
