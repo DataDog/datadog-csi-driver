@@ -7,6 +7,7 @@ package librarymanager
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Library represents a Datadog package to download and mount as part of a DatadogLibrary volume request.
@@ -43,6 +44,21 @@ func (l *Library) Pull() bool {
 }
 
 // Image provides a container image path pullable by crane.
+// Handles both tag and digest versions:
+//   - Tags: registry/name:v1.0.0
+//   - Digests: registry/name@sha256:abc123...
 func (l *Library) Image() string {
-	return fmt.Sprintf("%s/%s:%s", l.registry, l.name, l.version)
+	// Digests use @ separator, tags use :
+	separator := ":"
+	if isDigest(l.version) {
+		separator = "@"
+	}
+	return fmt.Sprintf("%s/%s%s%s", l.registry, l.name, separator, l.version)
+}
+
+// isDigest returns true if the version string is an OCI digest (e.g., sha256:abc123...).
+// OCI digests follow the pattern algorithm:hex and always contain a colon.
+// Tags cannot contain colons per the OCI spec, so this check is sufficient.
+func isDigest(version string) bool {
+	return strings.Contains(version, ":")
 }
