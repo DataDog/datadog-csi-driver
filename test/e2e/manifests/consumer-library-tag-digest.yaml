@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer-library-tag-digest
+spec:
+  containers:
+  - name: consumer-library-tag-digest
+    image: busybox
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        set -e
+
+        # Verify library contents (same as v1.14.1 since we use its tag+digest)
+        test -d /test-library
+        test -f /test-library/version
+        test "$(cat /test-library/version)" = "1.14.1"
+        test -f /test-library/requirements.json
+        test -d /test-library/trace
+        test -d /test-library/appsec
+
+        echo "Library tag+digest test passed"
+
+        sleep 3600
+    volumeMounts:
+    - name: dd-library-volume
+      mountPath: /test-library
+      readOnly: true
+  volumes:
+  - name: dd-library-volume
+    csi:
+      driver: k8s.csi.datadoghq.com
+      readOnly: true
+      volumeAttributes:
+        type: DatadogLibrary
+        dd.csi.datadog.com/library.package: dd-lib-php-init
+        dd.csi.datadog.com/library.registry: gcr.io/datadoghq
+        # Using tag+digest combo for both readability and immutability
+        dd.csi.datadog.com/library.version: v1.14.1@sha256:a9fd46c59f907417fa660c42a614a87729cd5fd89ed372718fc8b512da8738ec

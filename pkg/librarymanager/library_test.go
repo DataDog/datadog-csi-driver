@@ -56,6 +56,13 @@ func TestNewLibrary(t *testing.T) {
 			pull:          true,
 			expectedImage: "gcr.io/datadoghq/dd-lib-python-init@sha512:abc123def456",
 		},
+		"tag@digest combo uses : separator": {
+			name:          "dd-lib-python-init",
+			registry:      "gcr.io/datadoghq",
+			version:       "v1.2.3@sha256:abc123def456",
+			pull:          true,
+			expectedImage: "gcr.io/datadoghq/dd-lib-python-init:v1.2.3@sha256:abc123def456",
+		},
 		"empty name causes error": {
 			name:     "",
 			registry: "bar",
