@@ -7,6 +7,7 @@ package librarymanager
 
 import (
 	"fmt"
+	"strings"
 )
 
 // Library represents a Datadog package to download and mount as part of a DatadogLibrary volume request.
@@ -43,6 +44,15 @@ func (l *Library) Pull() bool {
 }
 
 // Image provides a container image path pullable by crane.
+// Handles tag, digest, and tag@digest versions:
+//   - Tags: registry/name:v1.0.0
+//   - Digests: registry/name@sha256:abc123...
+//   - Tag+Digest: registry/name:v1.0.0@sha256:abc123...
 func (l *Library) Image() string {
-	return fmt.Sprintf("%s/%s:%s", l.registry, l.name, l.version)
+	separator := ":"
+	// If the version contains : but not @, it's a pure digest, so use @ separator
+	if strings.Contains(l.version, ":") && !strings.Contains(l.version, "@") {
+		separator = "@"
+	}
+	return fmt.Sprintf("%s/%s%s%s", l.registry, l.name, separator, l.version)
 }
