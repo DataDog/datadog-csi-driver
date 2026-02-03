@@ -7,6 +7,7 @@ package driver
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
@@ -14,6 +15,11 @@ import (
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
 	"k8s.io/utils/mount"
+)
+
+const (
+	// cleanupDelay is the delay before cleaning up unused libraries.
+	cleanupDelay = 15 * time.Minute
 )
 
 // DatadogCSIDriver is datadog CSI driver implementing CSI Node and Identity Server
@@ -49,7 +55,10 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBase
 		return nil, fmt.Errorf("failed to create storage base path: %w", err)
 	}
 
-	lm, err := librarymanager.NewLibraryManager(storageBasePath)
+	lm, err := librarymanager.NewLibraryManager(
+		storageBasePath,
+		librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
+	)
 	if err != nil {
 		return nil, err
 	}
