@@ -1,8 +1,6 @@
 module github.com/Datadog/datadog-csi-driver
 
-go 1.24.0
-
-toolchain go1.24.11
+go 1.25.7
 
 require (
 	github.com/container-storage-interface/spec v1.11.0
