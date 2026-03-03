@@ -10,6 +10,7 @@ spec:
     args:
       - |
         set -e
+        trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
 
         # Verify library contents
         PRELOAD_SO="/test-library/stable/inject/launcher.preload.so"
@@ -35,8 +36,6 @@ spec:
         esac
 
         echo "Library test passed"
-
-        sleep 3600
     volumeMounts:
     - name: dd-library-volume
       mountPath: /test-library

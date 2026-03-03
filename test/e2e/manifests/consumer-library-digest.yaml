@@ -10,6 +10,7 @@ spec:
     args:
       - |
         set -e
+        trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
 
         # Verify library contents (same as v1.14.1 since we use its digest)
         test -d /test-library
@@ -20,8 +21,6 @@ spec:
         test -d /test-library/appsec
 
         echo "Library digest test passed"
-
-        sleep 3600
     volumeMounts:
     - name: dd-library-volume
       mountPath: /test-library
