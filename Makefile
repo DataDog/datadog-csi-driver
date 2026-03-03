@@ -26,7 +26,7 @@ endif
 ifeq ($(UNAME_M),x86_64)
 	KIND_ARCH := amd64
 endif
-ifeq ($(UNAME_M),arm64)
+ifneq (,$(filter arm64 aarch64,$(UNAME_M)))
 	KIND_ARCH := arm64
 endif
 
