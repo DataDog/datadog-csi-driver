@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-02-03
+
 ### Fixed
 
 - Fixed library downloads pulling wrong CPU architecture on non-amd64 nodes
@@ -70,7 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.0.0...v1.1.0
