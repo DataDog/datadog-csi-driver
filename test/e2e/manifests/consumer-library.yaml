@@ -10,18 +10,32 @@ spec:
     args:
       - |
         set -e
+        trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
 
         # Verify library contents
-        test -d /test-library
-        test -f /test-library/version
-        test "$(cat /test-library/version)" = "1.14.1"
-        test -f /test-library/requirements.json
-        test -d /test-library/trace
-        test -d /test-library/appsec
+        PRELOAD_SO="/test-library/0.55.0/inject/launcher.preload.so"
+        test -f "$PRELOAD_SO"
+
+        # Read ELF e_machine field (bytes 18-19, little-endian)
+        # 0x3E (62) = x86-64, 0xB7 (183) = aarch64
+        ELF_MACHINE=$(od -An -t u1 -j 18 -N 1 "$PRELOAD_SO" | tr -d ' ')
+        NODE_ARCH=$(uname -m)
+        echo "Node architecture: $NODE_ARCH"
+        echo "ELF e_machine: $ELF_MACHINE"
+
+        case "$NODE_ARCH" in
+          x86_64)
+            [ "$ELF_MACHINE" = "62" ] || { echo "ERROR: Expected x86-64 (62), got $ELF_MACHINE"; exit 1; }
+            ;;
+          aarch64|arm64)
+            [ "$ELF_MACHINE" = "183" ] || { echo "ERROR: Expected aarch64 (183), got $ELF_MACHINE"; exit 1; }
+            ;;
+          *)
+            echo "ERROR: Unknown architecture $NODE_ARCH"; exit 1
+            ;;
+        esac
 
         echo "Library test passed"
-
-        sleep 3600
     volumeMounts:
     - name: dd-library-volume
       mountPath: /test-library
@@ -33,6 +47,6 @@ spec:
       readOnly: true
       volumeAttributes:
         type: DatadogLibrary
-        dd.csi.datadog.com/library.package: dd-lib-php-init
-        dd.csi.datadog.com/library.registry: gcr.io/datadoghq
-        dd.csi.datadog.com/library.version: v1.14.1
+        dd.csi.datadog.com/library.package: apm-inject
+        dd.csi.datadog.com/library.registry: public.ecr.aws/datadog
+        dd.csi.datadog.com/library.version: "0.55.0"

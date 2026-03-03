@@ -10,14 +10,13 @@ spec:
     args:
       - |
         set -e
+        trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
 
         # Verify the preload file is mounted and contains the expected content
         test -f /etc/ld.so.preload
         test "$(cat /etc/ld.so.preload)" = "/opt/datadog-packages/datadog-apm-inject/stable/inject/launcher.preload.so"
 
         echo "Injector preload test passed"
-
-        sleep 3600
     volumeMounts:
     - name: dd-preload-volume
       mountPath: /etc/ld.so.preload

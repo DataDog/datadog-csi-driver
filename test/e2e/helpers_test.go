@@ -121,7 +121,7 @@ func assertPodLogsContain(t *testing.T, ctx context.Context, clientset *kubernet
 
 	t.Logf("Verifying logs for pod %s...", podName)
 
-	assert.EventuallyWithTf(t, func(collect *assert.CollectT) {
+	success := assert.EventuallyWithTf(t, func(collect *assert.CollectT) {
 		logs, err := clientset.CoreV1().Pods(defaultNamespace).GetLogs(podName, &corev1.PodLogOptions{}).DoRaw(ctx)
 		if err != nil {
 			collect.Errorf("Failed to fetch logs for pod %s: %v", podName, err)
@@ -131,10 +131,19 @@ func assertPodLogsContain(t *testing.T, ctx context.Context, clientset *kubernet
 		logStr := string(logs)
 		for _, expected := range expectedStrings {
 			if !strings.Contains(logStr, expected) {
-				collect.Errorf("Pod %s logs do not contain %q. Logs: %s", podName, expected, logStr)
+				collect.Errorf("Pod %s logs do not contain %q", podName, expected)
 			}
 		}
 	}, timeout, 2*time.Second, "pod %s logs verification failed", podName)
+
+	if !success {
+		logs, err := clientset.CoreV1().Pods(defaultNamespace).GetLogs(podName, &corev1.PodLogOptions{}).DoRaw(ctx)
+		if err != nil {
+			t.Logf("=== Failed to fetch logs for pod %s: %v ===", podName, err)
+		} else {
+			t.Logf("=== Logs for pod %s ===\n%s", podName, string(logs))
+		}
+	}
 }
 
 // getPodLogs returns the logs of a pod.
