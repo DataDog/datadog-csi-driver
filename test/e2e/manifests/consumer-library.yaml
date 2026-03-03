@@ -13,7 +13,7 @@ spec:
         trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
 
         # Verify library contents
-        PRELOAD_SO="/test-library/stable/inject/launcher.preload.so"
+        PRELOAD_SO="/test-library/0.55.0/inject/launcher.preload.so"
         test -f "$PRELOAD_SO"
 
         # Read ELF e_machine field (bytes 18-19, little-endian)
