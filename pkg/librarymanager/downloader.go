@@ -10,9 +10,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime"
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/crane"
+	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/spf13/afero"
 )
 
@@ -41,7 +43,12 @@ func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
 // Download will stream a container image and extract the source directory from inside of the image to the destination
 // directory on disk.
 func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string, dst string) error {
-	img, err := crane.Pull(image, crane.WithContext(ctx), crane.WithUserAgent(userAgent), crane.WithTransport(d.roundTripper))
+	img, err := crane.Pull(image,
+		crane.WithContext(ctx),
+		crane.WithUserAgent(userAgent),
+		crane.WithTransport(d.roundTripper),
+		crane.WithPlatform(&v1.Platform{OS: runtime.GOOS, Architecture: runtime.GOARCH}),
+	)
 	if err != nil {
 		return fmt.Errorf("could not pull %s: %w", image, err)
 	}
