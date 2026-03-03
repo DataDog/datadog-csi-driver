@@ -73,9 +73,14 @@ func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string
 
 // FetchDigest will fetch a sha256 sum of the image and return it.
 func (d *Downloader) FetchDigest(ctx context.Context, image string) (string, error) {
-	digest, err := crane.Digest(image, crane.WithContext(ctx), crane.WithUserAgent(userAgent), crane.WithTransport(d.roundTripper))
+	digest, err := crane.Digest(image,
+		crane.WithContext(ctx),
+		crane.WithUserAgent(userAgent),
+		crane.WithTransport(d.roundTripper),
+		crane.WithPlatform(&v1.Platform{OS: runtime.GOOS, Architecture: runtime.GOARCH}),
+	)
 	if err != nil {
-		return "", fmt.Errorf("could not get digetst %s: %w", image, err)
+		return "", fmt.Errorf("could not get digest %s: %w", image, err)
 	}
 	if !strings.HasPrefix(digest, "sha256:") {
 		return "", fmt.Errorf("digest does not have expected prefix: %s", digest)
