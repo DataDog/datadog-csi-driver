@@ -103,7 +103,7 @@ require (
 	go.etcd.io/bbolt v1.4.3
 	k8s.io/api v0.28.3
 	k8s.io/apimachinery v0.28.3
-	k8s.io/client-go v0.28.3
+	k8s.io/client-go v1.5.2
 )
 
 replace (
