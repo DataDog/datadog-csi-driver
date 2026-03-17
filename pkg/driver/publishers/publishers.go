@@ -45,11 +45,12 @@ func GetPublishers(
 	apmSocketPath, dsdSocketPath, storageBasePath string,
 	libraryManager *librarymanager.LibraryManager,
 	apmEnabled bool,
+	allowedRegistries []string,
 ) Publisher {
 	// Order matters, the first publisher to return a response will stop the chain
 	return newChainPublisher(
 		// SSI publishers (library and injector preload)
-		newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled),
+		newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled, allowedRegistries),
 		newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
 
 		// New "type" schema publishers

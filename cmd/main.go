@@ -34,6 +34,10 @@ func init() {
 	// Env var: DD_APM_ENABLED
 	pflag.Bool("apm-enabled", true, "Enable APM/SSI publishers (library and injector preload)")
 
+	// Allowed registries for DatadogLibrary volumes. If empty, all registries are allowed.
+	// Env var: DD_REGISTRY_ALLOW_LIST (comma-separated)
+	pflag.StringSlice("registry-allow-list", []string{}, "Allowed registries for DatadogLibrary volumes. If empty, all registries are allowed.")
+
 	// Parse flags
 	pflag.Parse()
 

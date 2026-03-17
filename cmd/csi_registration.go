@@ -29,6 +29,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		viper.GetString("storage-path"),
 		Version,
 		viper.GetBool("apm-enabled"),
+		viper.GetStringSlice("registry-allow-list"),
 	)
 	if err != nil {
 		log.Error("Failed to create CSI driver", "error", err)

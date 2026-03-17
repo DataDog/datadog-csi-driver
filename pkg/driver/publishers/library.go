@@ -36,6 +36,9 @@ type libraryPublisher struct {
 	libraryManager *librarymanager.LibraryManager
 	// disabled indicates if SSI is disabled (publish requests will be rejected)
 	disabled bool
+	// allowedRegistries is the list of registries that are allowed to be used.
+	// If empty, all registries are allowed.
+	allowedRegistries []string
 }
 
 // Publish downloads the library from the OCI registry if needed and bind-mounts it to the target path.
@@ -53,6 +56,11 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 	// Defensive code: library volumes must be mounted in read-only mode to protect the shared store
 	if !req.GetReadonly() {
 		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("library volumes must be mounted in read-only mode")
+	}
+
+	registry := volumeCtx[keyLibraryRegistry]
+	if err := checkRegistryAllowed(registry, s.allowedRegistries); err != nil {
+		return &PublisherResponse{VolumeType: DatadogLibrary}, err
 	}
 
 	libraryPath, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
@@ -133,6 +141,19 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	return path, lib.Image(), nil
 }
 
-func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool) Publisher {
-	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled}
+func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool, allowedRegistries []string) Publisher {
+	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled, allowedRegistries: allowedRegistries}
+}
+
+// checkRegistryAllowed returns nil if the registry is in the allow list, or if the allow list is empty.
+func checkRegistryAllowed(registry string, allowed []string) error {
+	if len(allowed) == 0 {
+		return nil
+	}
+	for _, r := range allowed {
+		if r == registry {
+			return nil
+		}
+	}
+	return fmt.Errorf("registry %q is not in the allow list", registry)
 }
