@@ -28,7 +28,7 @@ tests:
 
 e2e_tests:
   stage: e2e
-  image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_${ARCH_ALT}:v66293343-2eef00c4
+  image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_${ARCH_ALT}:v102144341-64dad9f8
   tags:
     - docker-in-docker:${ARCH}
   variables:
