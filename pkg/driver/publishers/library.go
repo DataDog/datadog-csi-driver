@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
@@ -59,8 +60,8 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 	}
 
 	registry := volumeCtx[keyLibraryRegistry]
-	if err := checkRegistryAllowed(registry, s.allowedRegistries); err != nil {
-		return &PublisherResponse{VolumeType: DatadogLibrary}, err
+	if !s.registryAllowed(registry) {
+		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("registry %q is not in the allow list", registry)
 	}
 
 	libraryPath, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
@@ -145,15 +146,10 @@ func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager
 	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled, allowedRegistries: allowedRegistries}
 }
 
-// checkRegistryAllowed returns nil if the registry is in the allow list, or if the allow list is empty.
-func checkRegistryAllowed(registry string, allowed []string) error {
-	if len(allowed) == 0 {
-		return nil
+// registryAllowed returns true if the registry is in libraryPublisher's list of allowed registries, or if the list is nil (allow all).
+func (s *libraryPublisher) registryAllowed(registry string) bool {
+	if len(s.allowedRegistries) == 0 {
+		return true
 	}
-	for _, r := range allowed {
-		if r == registry {
-			return nil
-		}
-	}
-	return fmt.Errorf("registry %q is not in the allow list", registry)
+	return slices.Contains(s.allowedRegistries, registry)
 }

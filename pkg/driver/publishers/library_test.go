@@ -208,43 +208,38 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 		"mount source should contain library path, got: %s", mountLog[0].Source)
 }
 
-func TestCheckRegistryAllowed(t *testing.T) {
+func TestRegistryAllowed(t *testing.T) {
 	tests := map[string]struct {
-		registry  string
-		allowed   []string
-		expectErr bool
+		registry      string
+		allowed       []string
+		expectAllowed bool
 	}{
 		"empty allow list permits any registry": {
-			registry:  "gcr.io/untrusted",
-			allowed:   []string{},
-			expectErr: false,
+			registry:      "gcr.io/untrusted",
+			allowed:       []string{},
+			expectAllowed: true,
 		},
 		"nil allow list permits any registry": {
-			registry:  "gcr.io/untrusted",
-			allowed:   nil,
-			expectErr: false,
+			registry:      "gcr.io/untrusted",
+			allowed:       nil,
+			expectAllowed: true,
 		},
 		"listed registry is permitted": {
-			registry:  "gcr.io/datadoghq",
-			allowed:   []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
-			expectErr: false,
+			registry:      "gcr.io/datadoghq",
+			allowed:       []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
+			expectAllowed: true,
 		},
 		"unlisted registry is rejected": {
-			registry:  "gcr.io/untrusted",
-			allowed:   []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
-			expectErr: true,
+			registry:      "gcr.io/untrusted",
+			allowed:       []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
+			expectAllowed: false,
 		},
 	}
 
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := checkRegistryAllowed(tc.registry, tc.allowed)
-			if tc.expectErr {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "not in the allow list")
-			} else {
-				assert.NoError(t, err)
-			}
+			publisher := &libraryPublisher{allowedRegistries: tc.allowed}
+			assert.Equal(t, tc.expectAllowed, publisher.registryAllowed(tc.registry))
 		})
 	}
 }
