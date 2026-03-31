@@ -56,14 +56,12 @@ func (d *DatadogCSIDriver) NodeUnpublishVolume(_ context.Context, req *csi.NodeU
 	resp, err := d.publisher.Unpublish(req)
 	if err != nil {
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusFailed)
-		log.Error("failed to unpublish volume", "error", err)
-		return &csi.NodeUnpublishVolumeResponse{}, nil
+		return nil, fmt.Errorf("failed to unpublish volume: %v", err)
 	}
 
 	if resp == nil {
 		metrics.RecordVolumeUnMountAttempt(metrics.StatusUnsupported)
-		log.Error("unpublish volume request not supported by any publisher")
-		return &csi.NodeUnpublishVolumeResponse{}, nil
+		return nil, fmt.Errorf("unpublish volume request not supported by any publisher")
 	}
 
 	metrics.RecordVolumeUnMountAttempt(metrics.StatusSuccess)
