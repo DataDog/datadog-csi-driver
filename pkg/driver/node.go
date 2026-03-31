@@ -7,6 +7,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	log "log/slog"
 	"os"
 
@@ -34,15 +35,13 @@ func (d *DatadogCSIDriver) NodePublishVolume(_ context.Context, req *csi.NodePub
 	if err != nil {
 		volumeCtx := req.GetVolumeContext()
 		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusFailed)
-		log.Error("failed to publish volume, pod will start without this volume's content", "error", err)
-		return &csi.NodePublishVolumeResponse{}, nil
+		return nil, fmt.Errorf("failed to publish volume: %v", err)
 	}
 
 	if resp == nil {
 		volumeCtx := req.GetVolumeContext()
 		metrics.RecordVolumeMountAttempt(volumeCtx["type"], req.GetTargetPath(), metrics.StatusUnsupported)
-		log.Error("unsupported volume type, pod will start without this volume's content", "type", volumeCtx["type"])
-		return &csi.NodePublishVolumeResponse{}, nil
+		return nil, fmt.Errorf("unsupported volume type: %q", volumeCtx["type"])
 	}
 
 	metrics.RecordVolumeMountAttempt(string(resp.VolumeType), resp.VolumePath, metrics.StatusSuccess)
