@@ -6,6 +6,8 @@
 package publishers
 
 import (
+	log "log/slog"
+
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -46,11 +48,21 @@ func GetPublishers(
 	libraryManager *librarymanager.LibraryManager,
 	apmEnabled bool,
 ) Publisher {
-	// Order matters, the first publisher to return a response will stop the chain
-	return newChainPublisher(
-		// SSI publishers (library and injector preload)
-		newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled),
-		newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
+	var publishers []Publisher
+
+	// These publishers require writable storage
+	if storageBasePath != "" {
+		publishers = append(publishers,
+			// SSI publishers (library and injector preload)
+			newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled),
+			newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
+		)
+	} else {
+		log.Info("SSI storage publishers are disabled because storageBasePath is empty")
+	}
+
+	publishers = append(
+		publishers,
 
 		// New "type" schema publishers
 		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
@@ -63,4 +75,7 @@ func GetPublishers(
 		// Fallback unmount handler for most Unpublish requests
 		newUnmountPublisher(fs, mounter),
 	)
+
+	// Order matters, the first publisher to return a response will stop the chain
+	return newChainPublisher(publishers...)
 }
