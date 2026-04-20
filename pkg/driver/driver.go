@@ -81,7 +81,7 @@ func newDatadogCSIDriver(
 	var err error
 	storageBasePath, err = createStorageDir(fs, storageBasePath)
 	if err != nil {
-		logger.Info("Disabling SSI storage", "storage_base_path", requestedStorageBasePath, "error", err)
+		logger.Warn("Disabling SSI storage", "storage_base_path", requestedStorageBasePath, "error", err)
 		storageBasePath = ""
 	}
 

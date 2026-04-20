@@ -6,6 +6,8 @@
 package publishers
 
 import (
+	log "log/slog"
+
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -55,6 +57,8 @@ func GetPublishers(
 			newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled),
 			newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
 		)
+	} else {
+		log.Info("SSI storage publishers are disabled because storageBasePath is empty")
 	}
 
 	publishers = append(
