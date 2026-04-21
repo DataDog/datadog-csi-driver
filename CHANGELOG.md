@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-04-21
+
 ### Fixed
 
 - Fixed driver startup to disable SSI publishers when `storageBasePath` is not writable instead of failing initialization
@@ -76,7 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.1.0...v1.1.1
