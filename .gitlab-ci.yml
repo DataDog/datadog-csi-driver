@@ -2,7 +2,7 @@
 include:
   - local: .adms/go/gitlab.yaml
 # Go version is defined in go.mod - this image is used as fallback
-image: registry.ddbuild.io/images/mirror/golang:1.24
+image: registry.ddbuild.io/images/mirror/golang:1.26.2
 variables:
   PROJECTNAME: "datadog-csi-driver"
   BUILD_DOCKER_REGISTRY: "registry.ddbuild.io/ci"
@@ -21,7 +21,7 @@ stages:
 
 tests:
   stage: test
-  image: registry.ddbuild.io/images/mirror/golang:1.24
+  image: registry.ddbuild.io/images/mirror/golang:1.26.2
   tags: ["arch:amd64"]
   script:
     - make test
