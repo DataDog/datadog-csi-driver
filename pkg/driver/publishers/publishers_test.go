@@ -18,7 +18,7 @@ func TestGetPublishers_SkipsSSIPublishersWhenStorageBasePathIsEmpty(t *testing.T
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := GetPublishers(fs, mounter, "/tmp/apm.sock", "/tmp/dsd.sock", "", nil, true)
+	publisher := GetPublishers(fs, mounter, "/tmp/apm.sock", "/tmp/dsd.sock", "", nil, true, nil)
 
 	t.Run("library volume is ignored", func(t *testing.T) {
 		resp, err := publisher.Publish(&csi.NodePublishVolumeRequest{

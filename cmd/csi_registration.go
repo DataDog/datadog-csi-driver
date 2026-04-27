@@ -10,6 +10,7 @@ import (
 	"fmt"
 	log "log/slog"
 	"net"
+	"strings"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver"
 	"github.com/Datadog/datadog-csi-driver/utils"
@@ -29,6 +30,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		viper.GetString("storage-path"),
 		Version,
 		viper.GetBool("apm-enabled"),
+		getRegistryAllowList(),
 	)
 	if err != nil {
 		log.Error("Failed to create CSI driver", "error", err)
@@ -79,4 +81,20 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 	case <-ctx.Done():
 		return nil
 	}
+}
+
+// getRegistryAllowList returns the registry allow list, handling the case where
+// Viper returns a comma-separated env var as a single element instead of splitting it.
+func getRegistryAllowList() []string {
+	raw := viper.GetStringSlice("registry-allow-list")
+	var result []string
+	for _, item := range raw {
+		for _, r := range strings.Split(item, ",") {
+			r = strings.TrimSpace(r)
+			if r != "" {
+				result = append(result, r)
+			}
+		}
+	}
+	return result
 }

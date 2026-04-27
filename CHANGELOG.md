@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- New `--registry-allow-list` flag (env: `DD_REGISTRY_ALLOW_LIST`) for `DatadogLibrary` volumes. When non-empty, only registries in the list are permitted; requests specifying an unlisted registry are rejected. Empty list (default) allows all registries.
+
 ## [1.2.2] - 2026-04-21
 
 ### Fixed

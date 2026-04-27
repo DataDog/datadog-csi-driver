@@ -9,6 +9,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
@@ -36,6 +37,9 @@ type libraryPublisher struct {
 	libraryManager *librarymanager.LibraryManager
 	// disabled indicates if SSI is disabled (publish requests will be rejected)
 	disabled bool
+	// allowedRegistries is the list of registries that are allowed to be used.
+	// If empty, all registries are allowed.
+	allowedRegistries []string
 }
 
 // Publish downloads the library from the OCI registry if needed and bind-mounts it to the target path.
@@ -53,6 +57,11 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 	// Defensive code: library volumes must be mounted in read-only mode to protect the shared store
 	if !req.GetReadonly() {
 		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("library volumes must be mounted in read-only mode")
+	}
+
+	registry := volumeCtx[keyLibraryRegistry]
+	if !s.registryAllowed(registry) {
+		return &PublisherResponse{VolumeType: DatadogLibrary}, fmt.Errorf("registry %q is not in the allow list", registry)
 	}
 
 	libraryPath, image, err := s.getLibraryPath(volumeCtx, req.GetVolumeId())
@@ -133,6 +142,14 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	return path, lib.Image(), nil
 }
 
-func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool) Publisher {
-	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled}
+func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool, allowedRegistries []string) Publisher {
+	return libraryPublisher{fs: fs, mounter: mounter, libraryManager: libraryManager, disabled: disabled, allowedRegistries: allowedRegistries}
+}
+
+// registryAllowed returns true if the registry is in libraryPublisher's list of allowed registries, or if the list is nil (allow all).
+func (s *libraryPublisher) registryAllowed(registry string) bool {
+	if len(s.allowedRegistries) == 0 {
+		return true
+	}
+	return slices.Contains(s.allowedRegistries, registry)
 }

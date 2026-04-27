@@ -175,7 +175,7 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 
 	// Create publisher
 	mounter := mount.NewFakeMounter(nil)
-	publisher := newLibraryPublisher(fs, mounter, lm, false)
+	publisher := newLibraryPublisher(fs, mounter, lm, false, nil)
 
 	// Create target directory
 	targetPath := filepath.Join(t.TempDir(), "target", "library")
@@ -208,6 +208,113 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 		"mount source should contain library path, got: %s", mountLog[0].Source)
 }
 
+func TestRegistryAllowed(t *testing.T) {
+	tests := map[string]struct {
+		registry      string
+		allowed       []string
+		expectAllowed bool
+	}{
+		"empty allow list permits any registry": {
+			registry:      "gcr.io/untrusted",
+			allowed:       []string{},
+			expectAllowed: true,
+		},
+		"nil allow list permits any registry": {
+			registry:      "gcr.io/untrusted",
+			allowed:       nil,
+			expectAllowed: true,
+		},
+		"listed registry is permitted": {
+			registry:      "gcr.io/datadoghq",
+			allowed:       []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
+			expectAllowed: true,
+		},
+		"unlisted registry is rejected": {
+			registry:      "gcr.io/untrusted",
+			allowed:       []string{"gcr.io/datadoghq", "public.ecr.aws/datadog"},
+			expectAllowed: false,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			publisher := &libraryPublisher{allowedRegistries: tc.allowed}
+			assert.Equal(t, tc.expectAllowed, publisher.registryAllowed(tc.registry))
+		})
+	}
+}
+
+func TestLibraryPublisher_Publish_RegistryAllowList(t *testing.T) {
+	// Setup local registry with test image
+	localRegistry := testutil.NewLocalRegistry(t)
+	defer localRegistry.Stop()
+	localRegistry.AddImage(t, "../../librarymanager/testdata/image.tar", "test-image", "v1.0.0")
+
+	// Create temp directory for library manager
+	basePath := t.TempDir()
+
+	// Create library manager with test downloader
+	fs := afero.Afero{Fs: afero.NewOsFs()}
+	lm, err := librarymanager.NewLibraryManager(basePath,
+		librarymanager.WithFilesystem(fs),
+		librarymanager.WithDownloader(librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))),
+	)
+	require.NoError(t, err)
+	defer lm.Stop()
+
+	mounter := mount.NewFakeMounter(nil)
+	registryHost := localRegistry.Registry(t)
+
+	tests := map[string]struct {
+		allowedRegistries []string
+		expectErr         bool
+	}{
+		"empty allow list permits the request": {
+			allowedRegistries: []string{},
+			expectErr:         false,
+		},
+		"allowed registry succeeds": {
+			allowedRegistries: []string{registryHost},
+			expectErr:         false,
+		},
+		"disallowed registry returns error": {
+			allowedRegistries: []string{"gcr.io/datadoghq"},
+			expectErr:         true,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			publisher := newLibraryPublisher(fs, mounter, lm, false, tc.allowedRegistries)
+			targetPath := filepath.Join(t.TempDir(), "target", "library")
+
+			req := &csi.NodePublishVolumeRequest{
+				VolumeId:   "test-volume-allowlist",
+				TargetPath: targetPath,
+				Readonly:   true,
+				VolumeContext: map[string]string{
+					"type":                                "DatadogLibrary",
+					"dd.csi.datadog.com/library.package":  "test-image",
+					"dd.csi.datadog.com/library.registry": registryHost,
+					"dd.csi.datadog.com/library.version":  "v1.0.0",
+				},
+			}
+
+			resp, err := publisher.Publish(req)
+			if tc.expectErr {
+				assert.NotNil(t, resp, "response should be non-nil for metrics")
+				assert.Equal(t, DatadogLibrary, resp.VolumeType)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "not in the allow list")
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				assert.Equal(t, DatadogLibrary, resp.VolumeType)
+			}
+		})
+	}
+}
+
 func TestLibraryPublisher_Unpublish_Success(t *testing.T) {
 	// Setup local registry with test image
 	localRegistry := testutil.NewLocalRegistry(t)
@@ -228,7 +335,7 @@ func TestLibraryPublisher_Unpublish_Success(t *testing.T) {
 
 	// Create publisher
 	mounter := mount.NewFakeMounter(nil)
-	publisher := newLibraryPublisher(fs, mounter, lm, false)
+	publisher := newLibraryPublisher(fs, mounter, lm, false, nil)
 
 	// First, publish a volume
 	targetPath := filepath.Join(t.TempDir(), "target", "library")

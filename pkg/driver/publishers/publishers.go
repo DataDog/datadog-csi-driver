@@ -47,6 +47,7 @@ func GetPublishers(
 	apmSocketPath, dsdSocketPath, storageBasePath string,
 	libraryManager *librarymanager.LibraryManager,
 	apmEnabled bool,
+	allowedRegistries []string,
 ) Publisher {
 	var publishers []Publisher
 
@@ -54,7 +55,7 @@ func GetPublishers(
 	if storageBasePath != "" {
 		publishers = append(publishers,
 			// SSI publishers (library and injector preload)
-			newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled),
+			newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled, allowedRegistries),
 			newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
 		)
 	} else {
