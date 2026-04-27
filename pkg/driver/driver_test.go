@@ -78,6 +78,7 @@ func TestNewDatadogCSIDriver_CreatesLibraryManagerWhenStoragePathIsWritable(t *t
 		storageBasePath,
 		"test-version",
 		true,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -106,6 +107,7 @@ func TestNewDatadogCSIDriver_DisablesSSIStorageWhenStoragePathIsNotWritable(t *t
 		"/var/datadog",
 		"test-version",
 		true,
+		nil,
 	)
 	require.NoError(t, err)
 
