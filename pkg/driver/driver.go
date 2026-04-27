@@ -7,6 +7,8 @@ package driver
 
 import (
 	"fmt"
+	log "log/slog"
+	"strings"
 	"time"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
@@ -42,25 +44,58 @@ func (driver *DatadogCSIDriver) Version() string {
 
 // Stop ensures all dependencies are stopped correctly.
 func (driver *DatadogCSIDriver) Stop() error {
+	if driver.libraryManager == nil {
+		return nil
+	}
 	return driver.libraryManager.Stop()
 }
 
-// NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string, apmEnabled bool, allowedRegistries []string) (*DatadogCSIDriver, error) {
-	fs := afero.Afero{Fs: afero.NewOsFs()}
-	mounter := mount.New("")
-
-	// Ensure the storage base path exists
-	if err := fs.MkdirAll(storageBasePath, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create storage base path: %w", err)
+func createStorageDir(fs afero.Afero, storageBasePath string) (string, error) {
+	storageBasePath = strings.TrimSpace(storageBasePath)
+	if storageBasePath == "" {
+		return "", nil
 	}
 
-	lm, err := librarymanager.NewLibraryManager(
-		storageBasePath,
-		librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
-	)
+	if err := fs.MkdirAll(storageBasePath, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create storage base path: %w", err)
+	}
+
+	probeDir, err := afero.TempDir(fs, storageBasePath, ".write-check-*")
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("storage base path is not writable: %w", err)
+	}
+	_ = fs.RemoveAll(probeDir)
+
+	return storageBasePath, nil
+}
+
+func newDatadogCSIDriver(
+	fs afero.Afero,
+	mounter mount.Interface,
+	logger *log.Logger,
+	name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string,
+	apmEnabled bool,
+	allowedRegistries []string,
+) (*DatadogCSIDriver, error) {
+	requestedStorageBasePath := storageBasePath
+
+	var err error
+	storageBasePath, err = createStorageDir(fs, storageBasePath)
+	if err != nil {
+		logger.Warn("Disabling SSI storage", "storage_base_path", requestedStorageBasePath, "error", err)
+		storageBasePath = ""
+	}
+
+	var lm *librarymanager.LibraryManager
+	if storageBasePath != "" {
+		lm, err = librarymanager.NewLibraryManager(
+			storageBasePath,
+			librarymanager.WithFilesystem(fs),
+			librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &DatadogCSIDriver{
@@ -72,4 +107,20 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBase
 		fs:             fs,
 		mounter:        mounter,
 	}, nil
+}
+
+// NewDatadogCSIDriver builds and returns a new Datadog CSI driver
+func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string, apmEnabled bool, allowedRegistries []string) (*DatadogCSIDriver, error) {
+	return newDatadogCSIDriver(
+		afero.Afero{Fs: afero.NewOsFs()},
+		mount.New(""),
+		log.Default(),
+		name,
+		apmHostSocketPath,
+		dsdHostSocketPath,
+		storageBasePath,
+		version,
+		apmEnabled,
+		allowedRegistries,
+	)
 }
