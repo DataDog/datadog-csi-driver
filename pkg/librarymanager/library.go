@@ -43,6 +43,16 @@ func (l *Library) Pull() bool {
 	return l.pull
 }
 
+// Name returns the package name of the library (e.g. dd-lib-java-init, apm-inject).
+func (l *Library) Name() string {
+	return l.name
+}
+
+// Registry returns the registry the library is pulled from.
+func (l *Library) Registry() string {
+	return l.registry
+}
+
 // Image provides a container image path pullable by crane.
 // Handles tag, digest, and tag@digest versions:
 //   - Tags: registry/name:v1.0.0

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
 	"github.com/spf13/afero"
 )
 
@@ -143,6 +144,13 @@ func (lm *LibraryManager) HasVolume(volumeID string) (bool, error) {
 // GetLibraryForVolume fetches the remote library if it doesn't exist, records its usage, and returns the path on disk
 // that can be mounted for the volume.
 func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID string, lib *Library) (string, error) {
+	// Track the resolution outcome for metrics. Default to "failed" so that any
+	// early return is reported as a failure unless explicitly overridden.
+	result := metrics.ResolutionFailed
+	defer func() {
+		metrics.RecordLibraryResolution(result)
+	}()
+
 	// Validate the input.
 	if volumeID == "" {
 		return "", fmt.Errorf("volume ID cannot be empty")
@@ -174,6 +182,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
+		result = metrics.ResolutionCacheHit
 		return path, nil
 	}
 
@@ -186,10 +195,12 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())
+	downloadStart := time.Now()
 	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}
+	metrics.ObserveLibraryDownloadDuration(lib.Name(), lib.Registry(), time.Since(downloadStart))
 
 	// Copy the library into the store.
 	storePath, err := lm.store.Add(libraryID, scratch)
@@ -197,6 +208,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
+	result = metrics.ResolutionDownloaded
 	return storePath, nil
 }
 
@@ -227,6 +239,8 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 // tryCleanupLibrary attempts to remove a library from disk if it's no longer in use.
 // It acquires the lock and checks the volume count before removing.
 func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
+	strategy := lm.cleanupStrategy.Name()
+
 	// Acquire lock to prevent race with GetLibraryForVolume
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
@@ -234,12 +248,19 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	// Check if the library is still in use
 	count, err := lm.db.GetVolumeCount(libraryID)
 	if err != nil {
+		metrics.RecordLibraryCleanup(metrics.CleanupFailed, strategy)
 		return fmt.Errorf("could not get linked library count: %w", err)
 	}
 	if count > 0 {
 		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
+		metrics.RecordLibraryCleanup(metrics.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
-	return lm.store.Remove(libraryID)
+	if err := lm.store.Remove(libraryID); err != nil {
+		metrics.RecordLibraryCleanup(metrics.CleanupFailed, strategy)
+		return err
+	}
+	metrics.RecordLibraryCleanup(metrics.CleanupSuccess, strategy)
+	return nil
 }

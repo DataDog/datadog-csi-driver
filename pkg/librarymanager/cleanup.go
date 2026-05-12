@@ -24,6 +24,10 @@ type CleanupStrategy interface {
 
 	// Stop stops the strategy and executes all pending cleanups.
 	Stop()
+
+	// Name returns the short identifier of the strategy (e.g. "immediate", "delayed").
+	// Used for metric labels.
+	Name() string
 }
 
 // ImmediateCleanupStrategy executes cleanup immediately when a library is no longer used.
@@ -44,6 +48,10 @@ func (s *ImmediateCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc
 
 func (s *ImmediateCleanupStrategy) Stop() {
 	// No-op: nothing to stop
+}
+
+func (s *ImmediateCleanupStrategy) Name() string {
+	return "immediate"
 }
 
 // DelayedCleanupStrategy waits for a configurable delay before executing cleanup.
@@ -111,6 +119,10 @@ func (s *DelayedCleanupStrategy) ScheduleCleanup(libraryID string, cleanupFunc C
 		timer:       timer,
 		cleanupFunc: cleanupFunc,
 	}
+}
+
+func (s *DelayedCleanupStrategy) Name() string {
+	return "delayed"
 }
 
 func (s *DelayedCleanupStrategy) Stop() {
