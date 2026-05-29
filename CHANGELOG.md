@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `datadog_csi_driver_library_resolutions_total{result}` (counter): library resolution outcomes (`cache_hit`, `downloaded`, `failed`).
   - `datadog_csi_driver_library_download_duration_seconds{library,registry}` (histogram): time spent downloading a library from the registry.
   - `datadog_csi_driver_library_cleanup_total{status,strategy}` (counter): cleanup attempts for unused libraries (`success`, `failed`, `skipped_in_use`).
+  - `datadog_csi_driver_library_volume_links{library}` (gauge): current number of volumes linked to each library package. Resynced from the database at startup. Series transitioning to zero are kept (not deleted) so dashboards and monitors can observe the "no volumes" state explicitly.
+  - `datadog_csi_driver_libraries_cached{library}` (gauge): number of distinct library versions currently cached on disk for each package. Resynced from the database at startup.
+  - `datadog_csi_driver_libraries_cached_bytes{library}` (gauge): total on-disk size in bytes of the cached library versions for each package. Resynced from the database at startup.
+
+### Changed
+
+- The on-disk library database now persists library metadata (package name, cache state, payload size) in a dedicated `library-metadata` bucket. Existing databases are upgraded transparently at startup: the new bucket is created empty and re-populated when a library is next downloaded. Libraries that were already cached before the upgrade carry no metadata and so report `library="unknown"` in both `datadog_csi_driver_library_volume_links` and `datadog_csi_driver_libraries_cached*` until they are evicted and re-downloaded. No manual action is required.
 
 ## [1.2.2] - 2026-04-21
 

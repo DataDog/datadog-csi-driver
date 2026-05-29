@@ -70,7 +70,7 @@ func TestExtract(t *testing.T) {
 			ctx := context.Background()
 			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, test.source, tsd.Path(t))
 			require.NoError(t, err, "could not setup extractor")
-			err = ae.Extract(ctx, f)
+			_, err = ae.Extract(ctx, f)
 			require.NoError(t, err, "could not extract archive")
 
 			// List files in the destination by path.
@@ -109,7 +109,8 @@ func TestExtractSymlink(t *testing.T) {
 	ctx := context.Background()
 	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
 	require.NoError(t, err)
-	require.NoError(t, ae.Extract(ctx, f))
+	_, err = ae.Extract(ctx, f)
+	require.NoError(t, err)
 
 	// Verify symlink was created with correct target
 	linkPath := filepath.Join(tsd.Path(t), "latest")
@@ -158,7 +159,7 @@ func TestExtractSymlinkPathTraversal(t *testing.T) {
 			require.NoError(t, err)
 
 			// Extraction should succeed - malicious paths are normalized, not rejected
-			err = ae.Extract(ctx, f)
+			_, err = ae.Extract(ctx, f)
 			require.NoError(t, err)
 
 			// Verify the symlink was created inside the destination (path was normalized)
@@ -199,7 +200,8 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 	// First extraction
 	f1, err := os.Open(archivePath)
 	require.NoError(t, err)
-	require.NoError(t, ae.Extract(ctx, f1))
+	_, err = ae.Extract(ctx, f1)
+	require.NoError(t, err)
 	f1.Close()
 
 	// Verify symlink exists
@@ -215,7 +217,8 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 
 	ae2, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
 	require.NoError(t, err)
-	require.NoError(t, ae2.Extract(ctx, f2), "second extraction should succeed when symlink already exists with same target")
+	_, err = ae2.Extract(ctx, f2)
+	require.NoError(t, err, "second extraction should succeed when symlink already exists with same target")
 }
 
 func TestExtractSymlinkNoTarget(t *testing.T) {
@@ -246,7 +249,7 @@ func TestExtractSymlinkNoTarget(t *testing.T) {
 	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
 	require.NoError(t, err)
 
-	err = ae.Extract(ctx, archive)
+	_, err = ae.Extract(ctx, archive)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "has no target")
 }

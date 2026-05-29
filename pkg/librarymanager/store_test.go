@@ -147,3 +147,4 @@ func TestStore(t *testing.T) {
 	require.False(t, exists, "package should no longer exist exist")
 	require.NoError(t, err, "no error should be returned")
 }
+

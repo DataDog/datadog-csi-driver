@@ -23,6 +23,10 @@ type ArchiveExtractor struct {
 	dst    string      // Absolute path to destination (needed for symlinks, as afero doesn't support them)
 	dstFs  afero.Afero // BasePathFs rooted at destination
 	format archives.Tar
+
+	// bytesExtracted tracks the cumulative size of regular files written
+	// during Extract. Reset on each Extract call.
+	bytesExtracted int64
 }
 
 // NewArchiveExtractor initializes a new archive extractor.
@@ -42,9 +46,14 @@ func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtra
 }
 
 // Extract will copy files from the configured source directory inside the archive to the desitnation directory outside
-// of the archive through the reader provided.
-func (fp *ArchiveExtractor) Extract(ctx context.Context, reader io.Reader) error {
-	return fp.format.Extract(ctx, reader, fp.processFile)
+// of the archive through the reader provided. Returns the cumulative size of
+// the regular files written; symlinks and directories are not counted.
+func (fp *ArchiveExtractor) Extract(ctx context.Context, reader io.Reader) (int64, error) {
+	fp.bytesExtracted = 0
+	if err := fp.format.Extract(ctx, reader, fp.processFile); err != nil {
+		return 0, err
+	}
+	return fp.bytesExtracted, nil
 }
 
 // processFile is a helper function that is called for every file extracted.
@@ -109,10 +118,11 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		}
 		defer out.Close()
 
-		_, err = io.Copy(out, in)
+		n, err := io.Copy(out, in)
 		if err != nil {
 			return fmt.Errorf("could not copy destination file: %w", err)
 		}
+		fp.bytesExtracted += n
 
 		return nil
 	default:

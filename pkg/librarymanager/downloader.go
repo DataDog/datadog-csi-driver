@@ -41,8 +41,8 @@ func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
 }
 
 // Download will stream a container image and extract the source directory from inside of the image to the destination
-// directory on disk.
-func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string, dst string) error {
+// directory on disk. Returns the cumulative size of the regular files written.
+func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string, dst string) (int64, error) {
 	img, err := crane.Pull(image,
 		crane.WithContext(ctx),
 		crane.WithUserAgent(userAgent),
@@ -50,7 +50,7 @@ func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string
 		crane.WithPlatform(&v1.Platform{OS: runtime.GOOS, Architecture: runtime.GOARCH}),
 	)
 	if err != nil {
-		return fmt.Errorf("could not pull %s: %w", image, err)
+		return 0, fmt.Errorf("could not pull %s: %w", image, err)
 	}
 
 	pr, pw := io.Pipe()
@@ -61,14 +61,14 @@ func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string
 	// Extract the entire image content
 	fp, err := NewArchiveExtractor(afs, "/", dst)
 	if err != nil {
-		return fmt.Errorf("could not setup archive extractor: %w", err)
+		return 0, fmt.Errorf("could not setup archive extractor: %w", err)
 	}
-	err = fp.Extract(ctx, pr)
+	bytes, err := fp.Extract(ctx, pr)
 	if err != nil {
-		return fmt.Errorf("could not extract archive: %w", err)
+		return 0, fmt.Errorf("could not extract archive: %w", err)
 	}
 
-	return nil
+	return bytes, nil
 }
 
 // FetchDigest will fetch a sha256 sum of the image and return it.

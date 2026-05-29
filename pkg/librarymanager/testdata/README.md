@@ -30,7 +30,7 @@ func TestCreateTestDatabase(t *testing.T) {
 
 	volumeID := "test-volume-id"
 	libraryID := "test-library-id"
-	err = db.LinkVolume(libraryID, volumeID)
-	require.NoError(t, err)
+	require.NoError(t, db.AddLibrary(libraryID, "dd-lib-java-init", 0))
+	require.NoError(t, db.LinkVolume(libraryID, volumeID))
 }
 ```

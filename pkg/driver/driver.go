@@ -13,6 +13,7 @@ import (
 
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -92,6 +93,7 @@ func newDatadogCSIDriver(
 			storageBasePath,
 			librarymanager.WithFilesystem(fs),
 			librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
+			librarymanager.WithEventListener(metrics.NewLibraryListener()),
 		)
 		if err != nil {
 			return nil, err

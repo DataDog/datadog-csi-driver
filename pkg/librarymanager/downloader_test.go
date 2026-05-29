@@ -54,7 +54,7 @@ func TestDownload(t *testing.T) {
 			require.Equal(t, test.expectedDigest, digest)
 
 			// Ensure downloaded files match the expected.
-			err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
+			size, err := d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
 			require.NoError(t, err, "error found when downloading")
 
 			// Ensure expected files exist.
@@ -63,6 +63,21 @@ func TestDownload(t *testing.T) {
 				_, err := os.Stat(checkPath)
 				require.NoError(t, err, "expected file %s to exist", checkPath)
 			}
+
+			// Ensure the reported size matches the cumulative size of the
+			// regular files actually written under the destination.
+			var expectedSize int64
+			err = filepath.Walk(tsd.Path(t), func(_ string, info os.FileInfo, walkErr error) error {
+				if walkErr != nil {
+					return walkErr
+				}
+				if info.Mode().IsRegular() {
+					expectedSize += info.Size()
+				}
+				return nil
+			})
+			require.NoError(t, err)
+			require.Equal(t, expectedSize, size, "Download must report the cumulative regular-file size")
 		})
 	}
 }

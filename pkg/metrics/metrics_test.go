@@ -28,6 +28,165 @@ func TestRecordLibraryResolution(t *testing.T) {
 	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(ResolutionFailed))))
 }
 
+func TestSetLibraryVolumeLinks(t *testing.T) {
+	libraryVolumeLinks.Reset()
+
+	SetLibraryVolumeLinks(map[string]int{
+		"dd-lib-java-init": 3,
+		"dd-lib-php-init":  1,
+		"":                 2, // legacy entries without a persisted package
+	})
+
+	require.Equal(t, float64(3), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-php-init")))
+	require.Equal(t, float64(2), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues(UnknownLibrary)))
+
+	// A subsequent call replaces stale series instead of leaving them behind.
+	SetLibraryVolumeLinks(map[string]int{"dd-lib-java-init": 5})
+
+	require.Equal(t, float64(5), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, 1, testutil.CollectAndCount(libraryVolumeLinks), "stale series must be cleared")
+}
+
+func TestSetLibraryVolumeLinksForPackage(t *testing.T) {
+	libraryVolumeLinks.Reset()
+
+	// Pre-populate two packages to make sure the targeted update only touches one.
+	SetLibraryVolumeLinks(map[string]int{
+		"dd-lib-java-init": 3,
+		"dd-lib-php-init":  1,
+	})
+
+	SetLibraryVolumeLinksForPackage("dd-lib-java-init", 7)
+
+	require.Equal(t, float64(7), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-php-init")), "other series must be untouched")
+	require.Equal(t, 2, testutil.CollectAndCount(libraryVolumeLinks))
+
+	// An empty package name maps to "unknown".
+	SetLibraryVolumeLinksForPackage("", 4)
+	require.Equal(t, float64(4), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues(UnknownLibrary)))
+}
+
+func TestDeleteLibraryVolumeLinksForPackage(t *testing.T) {
+	libraryVolumeLinks.Reset()
+
+	SetLibraryVolumeLinks(map[string]int{
+		"dd-lib-java-init": 3,
+		"dd-lib-php-init":  1,
+	})
+	require.Equal(t, 2, testutil.CollectAndCount(libraryVolumeLinks))
+
+	DeleteLibraryVolumeLinksForPackage("dd-lib-php-init")
+
+	require.Equal(t, 1, testutil.CollectAndCount(libraryVolumeLinks), "the deleted series must be gone")
+	require.Equal(t, float64(3), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+
+	// Deleting a missing package is a no-op.
+	DeleteLibraryVolumeLinksForPackage("dd-lib-php-init")
+	require.Equal(t, 1, testutil.CollectAndCount(libraryVolumeLinks))
+}
+
+func TestSetLibrariesCached(t *testing.T) {
+	librariesCached.Reset()
+
+	SetLibrariesCached(map[string]int{
+		"dd-lib-java-init": 2,
+		"dd-lib-php-init":  1,
+		"":                 1, // legacy entries without a persisted package
+	})
+
+	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-php-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues(UnknownLibrary)))
+
+	// A subsequent call replaces stale series rather than leaving them behind.
+	SetLibrariesCached(map[string]int{"dd-lib-java-init": 4})
+
+	require.Equal(t, float64(4), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, 1, testutil.CollectAndCount(librariesCached), "stale series must be cleared")
+}
+
+func TestSetLibrariesCachedForPackage(t *testing.T) {
+	librariesCached.Reset()
+
+	SetLibrariesCached(map[string]int{
+		"dd-lib-java-init": 2,
+		"dd-lib-php-init":  1,
+	})
+
+	SetLibrariesCachedForPackage("dd-lib-java-init", 5)
+
+	require.Equal(t, float64(5), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-php-init")), "other series must be untouched")
+	require.Equal(t, 2, testutil.CollectAndCount(librariesCached))
+
+	SetLibrariesCachedForPackage("", 3)
+	require.Equal(t, float64(3), testutil.ToFloat64(librariesCached.WithLabelValues(UnknownLibrary)))
+}
+
+func TestDeleteLibrariesCachedForPackage(t *testing.T) {
+	librariesCached.Reset()
+
+	SetLibrariesCached(map[string]int{
+		"dd-lib-java-init": 2,
+		"dd-lib-php-init":  1,
+	})
+	require.Equal(t, 2, testutil.CollectAndCount(librariesCached))
+
+	DeleteLibrariesCachedForPackage("dd-lib-php-init")
+
+	require.Equal(t, 1, testutil.CollectAndCount(librariesCached), "the deleted series must be gone")
+	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+}
+
+func TestSetLibrariesCachedBytes(t *testing.T) {
+	librariesCachedBytes.Reset()
+
+	SetLibrariesCachedBytes(map[string]int64{
+		"dd-lib-java-init": 1_000_000,
+		"dd-lib-php-init":  500_000,
+	})
+
+	require.Equal(t, float64(1_000_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(500_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-php-init")))
+
+	SetLibrariesCachedBytes(map[string]int64{"dd-lib-java-init": 2_000_000})
+	require.Equal(t, float64(2_000_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, 1, testutil.CollectAndCount(librariesCachedBytes), "stale series must be cleared")
+}
+
+func TestSetLibrariesCachedBytesForPackage(t *testing.T) {
+	librariesCachedBytes.Reset()
+
+	SetLibrariesCachedBytes(map[string]int64{
+		"dd-lib-java-init": 1_000_000,
+		"dd-lib-php-init":  500_000,
+	})
+
+	SetLibrariesCachedBytesForPackage("dd-lib-java-init", 3_000_000)
+	require.Equal(t, float64(3_000_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(500_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-php-init")), "other series must be untouched")
+
+	SetLibrariesCachedBytesForPackage("", 42)
+	require.Equal(t, float64(42), testutil.ToFloat64(librariesCachedBytes.WithLabelValues(UnknownLibrary)))
+}
+
+func TestDeleteLibrariesCachedBytesForPackage(t *testing.T) {
+	librariesCachedBytes.Reset()
+
+	SetLibrariesCachedBytes(map[string]int64{
+		"dd-lib-java-init": 1_000_000,
+		"dd-lib-php-init":  500_000,
+	})
+	require.Equal(t, 2, testutil.CollectAndCount(librariesCachedBytes))
+
+	DeleteLibrariesCachedBytesForPackage("dd-lib-php-init")
+
+	require.Equal(t, 1, testutil.CollectAndCount(librariesCachedBytes), "the deleted series must be gone")
+	require.Equal(t, float64(1_000_000), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+}
+
 func TestRecordLibraryCleanup(t *testing.T) {
 	libraryCleanup.Reset()
 

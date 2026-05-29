@@ -7,6 +7,7 @@ package librarymanager_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -165,4 +166,43 @@ func createTestLibrary(t *testing.T, tl *testVolume, registry string) *libraryma
 	lib, err := librarymanager.NewLibrary(tl.name, registry, tl.version, tl.pull)
 	require.NoError(t, err)
 	return lib
+}
+
+// TestLibraryManagerStartupResync ensures the manager can be created on top of a
+// database that already contains links (as happens after a driver restart) and
+// that the persisted package names are preserved.
+func TestLibraryManagerStartupResync(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+	basePath := tsd.Path(t)
+
+	// Pre-populate the database with two libraries and three linked volumes,
+	// covering two packages.
+	dbDir := filepath.Join(basePath, librarymanager.DatabaseDirectory)
+	require.NoError(t, os.MkdirAll(dbDir, 0o755))
+	db, err := librarymanager.NewDatabase(dbDir)
+	require.NoError(t, err)
+	require.NoError(t, db.AddLibrary("lib-java", "dd-lib-java-init", 0))
+	require.NoError(t, db.AddLibrary("lib-php", "dd-lib-php-init", 0))
+	require.NoError(t, db.LinkVolume("lib-java", "vol-1"))
+	require.NoError(t, db.LinkVolume("lib-java", "vol-2"))
+	require.NoError(t, db.LinkVolume("lib-php", "vol-3"))
+	require.NoError(t, db.Close())
+
+	// Bringing up a manager on the same base path must succeed; this also
+	// resynchronizes the library_volume_links gauge in the background.
+	lm, err := librarymanager.NewLibraryManager(basePath,
+		librarymanager.WithFilesystem(afero.Afero{Fs: afero.NewOsFs()}),
+	)
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, lm.Stop())
+	}()
+
+	// The persisted volume links remain visible after restart.
+	for _, volumeID := range []string{"vol-1", "vol-2", "vol-3"} {
+		has, err := lm.HasVolume(volumeID)
+		require.NoError(t, err)
+		require.Truef(t, has, "expected %s to still be tracked after manager restart", volumeID)
+	}
 }
