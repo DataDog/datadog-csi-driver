@@ -187,10 +187,12 @@ func (db *Database) loadCaches() error {
 				return nil
 			}
 			n := 0
-			bkt.ForEach(func(_, _ []byte) error {
+			if err := bkt.ForEach(func(_, _ []byte) error {
 				n++
 				return nil
-			})
+			}); err != nil {
+				return fmt.Errorf("could not iterate library bucket %s: %w", libraryID, err)
+			}
 			meta := db.metadataByLibrary[string(libraryID)]
 			meta.VolumeCount = n
 			db.metadataByLibrary[string(libraryID)] = meta
@@ -222,7 +224,7 @@ func (db *Database) LinkVolume(libraryID string, volumeID string) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Get the bucket for library mappings. If it doesn't exist, we have a system level issue.
 	libraryMappingBkt := tx.Bucket([]byte(LibraryMappingBucket))
@@ -313,7 +315,7 @@ func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 	if err != nil {
 		return fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Get the bucket for library mappings. If it doesn't exist, we have a system level issue.
 	libraryMappingBkt := tx.Bucket([]byte(LibraryMappingBucket))
@@ -415,7 +417,7 @@ func (db *Database) GetLibraryForVolume(volumeID string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not start transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	// Get the bucket for volume mappings. If it doesn't exist, we have a system level issue.
 	root := tx.Bucket([]byte(VolumeMappingBucket))

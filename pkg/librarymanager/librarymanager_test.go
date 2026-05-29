@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -19,6 +20,22 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
+
+// failingStoreRemovalFs wraps an afero.Fs and forces RemoveAll to fail for
+// any path under storePrefix. Used to exercise the cleanup-failed branch of
+// tryCleanupLibrary without relying on POSIX permission bits (which root
+// silently bypasses on CI).
+type failingStoreRemovalFs struct {
+	afero.Fs
+	storePrefix string
+}
+
+func (f *failingStoreRemovalFs) RemoveAll(path string) error {
+	if strings.HasPrefix(path, f.storePrefix) {
+		return fmt.Errorf("simulated store removal failure")
+	}
+	return f.Fs.RemoveAll(path)
+}
 
 type testImage struct {
 	tarPath string
@@ -390,10 +407,10 @@ func TestLibraryManagerWithCleanupStrategyAndEventListener(t *testing.T) {
 }
 
 // TestLibraryManagerCleanupFailedWhenStoreRemoveFails surfaces the
-// LibraryCleanupFailed branch of tryCleanupLibrary. We get there by making
-// the store filesystem read-only after the library has been added: the
-// subsequent RemoveAll fails, the manager surfaces a Failed cleanup event,
-// and the library remains on disk.
+// LibraryCleanupFailed branch of tryCleanupLibrary by wrapping the
+// filesystem so RemoveAll fails for paths under the store directory. We
+// avoid POSIX chmod because root (the user the tests run as on CI)
+// silently ignores permission bits and the cleanup would succeed anyway.
 func TestLibraryManagerCleanupFailedWhenStoreRemoveFails(t *testing.T) {
 	localRegistry := testutil.NewLocalRegistry(t)
 	defer localRegistry.Stop()
@@ -402,9 +419,12 @@ func TestLibraryManagerCleanupFailedWhenStoreRemoveFails(t *testing.T) {
 	tsd := testutil.NewTempScratchDirectory(t)
 	defer tsd.Cleanup(t)
 
+	storeDir := filepath.Join(tsd.Path(t), librarymanager.StoreDirectory)
+	fs := afero.Afero{Fs: &failingStoreRemovalFs{Fs: afero.NewOsFs(), storePrefix: storeDir}}
+
 	listener := &fakeListener{}
 	lm, err := librarymanager.NewLibraryManager(tsd.Path(t),
-		librarymanager.WithFilesystem(afero.Afero{Fs: afero.NewOsFs()}),
+		librarymanager.WithFilesystem(fs),
 		librarymanager.WithDownloader(librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))),
 		librarymanager.WithEventListener(listener),
 	)
@@ -417,13 +437,6 @@ func TestLibraryManagerCleanupFailedWhenStoreRemoveFails(t *testing.T) {
 	ctx := context.Background()
 	_, err = lm.GetLibraryForVolume(ctx, "vol-1", lib)
 	require.NoError(t, err)
-
-	// Make the store directory read-only so RemoveAll fails inside
-	// tryCleanupLibrary. The defer restores permissions before
-	// tsd.Cleanup runs (LIFO order) so the scratch tear-down succeeds.
-	storeDir := filepath.Join(tsd.Path(t), librarymanager.StoreDirectory)
-	require.NoError(t, os.Chmod(storeDir, 0o555))
-	defer func() { _ = os.Chmod(storeDir, 0o755) }()
 
 	require.NoError(t, lm.RemoveVolume(ctx, "vol-1"),
 		"RemoveVolume itself succeeds; only the async cleanup fails")
