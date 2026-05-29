@@ -105,6 +105,12 @@ var librariesCachedBytes = newGaugeVec(
 	"library",
 )
 
+var libraryVolumeLinks = newGaugeVec(
+	"library_volume_links",
+	"Number of volumes currently linked to a library",
+	"library",
+)
+
 func init() {
 	prometheus.MustRegister(nodeVolumeMountAttempts)
 	prometheus.MustRegister(nodeVolumeUnmountAttempts)
@@ -113,6 +119,7 @@ func init() {
 	prometheus.MustRegister(libraryCleanup)
 	prometheus.MustRegister(librariesCached)
 	prometheus.MustRegister(librariesCachedBytes)
+	prometheus.MustRegister(libraryVolumeLinks)
 }
 
 // RecordVolumeMountAttempt records a volume mount attempt
@@ -155,4 +162,10 @@ func SetLibrariesCachedForLibrary(library string, count int) {
 // for a given library, in bytes.
 func SetLibrariesCachedBytesForLibrary(library string, bytes int64) {
 	librariesCachedBytes.WithLabelValues(library).Set(float64(bytes))
+}
+
+// SetLibraryVolumeLinksForLibrary sets the number of volumes currently linked
+// to any cached version of the given library.
+func SetLibraryVolumeLinksForLibrary(library string, links int) {
+	libraryVolumeLinks.WithLabelValues(library).Set(float64(links))
 }

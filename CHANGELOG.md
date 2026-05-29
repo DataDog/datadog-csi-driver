@@ -16,15 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `datadog_csi_driver_library_cleanup_total{library,status,strategy}` (counter): cleanup attempts for unused libraries (`success`, `failed`, `skipped_in_use`).
   - `datadog_csi_driver_libraries_cached{library}` (gauge): number of versions currently stored on disk for each library.
   - `datadog_csi_driver_libraries_cached_bytes{library}` (gauge): cumulative on-disk size, in bytes, of cached versions for each library.
-- New `library-metadata` bucket in the on-disk bbolt database, storing the package name and on-disk size for each cached library. Required to publish per-package gauges across restarts.
+  - `datadog_csi_driver_library_volume_links{library}` (gauge): number of volumes currently linked to any cached version of a library.
+- New `library-metadata` bucket in the on-disk bbolt database, storing the package name and on-disk size for each cached library. Required to publish per-library gauges across restarts.
 
 ### Changed
 
 - `librarymanager` no longer depends on `pkg/metrics`. Lifecycle events are reported through a new `libraryevents.Listener` interface defined in a dedicated, dependency-free `pkg/libraryevents` package; the metrics-publishing implementation lives in `pkg/metrics` and is wired in `pkg/driver`.
+- `LinkVolume` now happens after the library has been confirmed on disk (cache hit) or recorded in the metadata bucket (successful download). This prevents dangling links if the download fails, and gives `library_volume_links` a stable library label.
+- `RemoveVolume` is now a no-op when the volume was never linked.
 
 ### Notes
 
-- Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.
+- Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` or `library_volume_links` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.
 
 ## [1.2.2] - 2026-04-21
 

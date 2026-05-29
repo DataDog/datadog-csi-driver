@@ -60,23 +60,39 @@ func TestLibraryListenerCachedAndEvictedSetGauges(t *testing.T) {
 	require.Equal(t, float64(0), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
 }
 
+func TestLibraryListenerVolumeLinkedAndUnlinkedSetGauge(t *testing.T) {
+	libraryVolumeLinks.Reset()
+
+	l := NewLibraryListener()
+	l.OnVolumeLinked("dd-lib-java-init", 3)
+	require.Equal(t, float64(3), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+
+	l.OnVolumeUnlinked("dd-lib-java-init", 0)
+	require.Equal(t, float64(0), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
+}
+
 func TestLibraryListenerOnSnapshotSeedsGauges(t *testing.T) {
 	librariesCached.Reset()
 	librariesCachedBytes.Reset()
+	libraryVolumeLinks.Reset()
 
 	// Pre-existing stale series should be wiped by Reset inside OnSnapshot.
 	librariesCached.WithLabelValues("stale").Set(7)
+	libraryVolumeLinks.WithLabelValues("stale").Set(7)
 
 	l := NewLibraryListener()
 	l.OnSnapshot(libraryevents.Snapshot{
 		CachedCountByLibrary: map[string]int{"dd-lib-java-init": 2, "dd-lib-php-init": 1},
 		CachedBytesByLibrary: map[string]int64{"dd-lib-java-init": 4096, "dd-lib-php-init": 64},
+		VolumeLinksByLibrary: map[string]int{"dd-lib-java-init": 5},
 	})
 
 	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
 	require.Equal(t, float64(4096), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
 	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-php-init")))
 	require.Equal(t, float64(64), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-php-init")))
+	require.Equal(t, float64(5), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
 
 	require.Equal(t, 2, testutil.CollectAndCount(librariesCached), "stale series should be evicted")
+	require.Equal(t, 1, testutil.CollectAndCount(libraryVolumeLinks), "stale series should be evicted")
 }

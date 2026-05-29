@@ -195,15 +195,11 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", fmt.Errorf("could not determine library ID: %w", err)
 	}
 
-	// Lock the package.
+	// Lock the package. The locker prevents cleanup from running while
+	// we resolve, so we can defer LinkVolume to after we have confirmed
+	// the library is on disk and recorded in the metadata bucket.
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
-
-	// Link the library as a first step to ensure any cleanup processes know we need this library.
-	err = lm.db.LinkVolume(libraryID, volumeID)
-	if err != nil {
-		return "", err
-	}
 
 	// If the library already exists, return it.
 	path, err := lm.store.Get(libraryID)
@@ -212,6 +208,9 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
+		if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+			return "", err
+		}
 		result = libraryevents.ResolutionCacheHit
 		return path, nil
 	}
@@ -241,25 +240,55 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 
 	// Record the library in the metadata bucket and notify the listener.
 	// AddLibrary is the canonical writer for the per-library metadata; it
-	// must be called before any consumer relies on the package name being
-	// available for the given library ID.
+	// must be called before LinkVolume so the volume-links aggregate has
+	// the right package name to associate the link with.
 	if err := lm.db.AddLibrary(libraryID, lib.Name(), sizeBytes); err != nil {
 		return "", fmt.Errorf("could not record library metadata: %w", err)
 	}
 	count, totalBytes := lm.db.PackageCacheStats(lib.Name())
 	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
 
+	if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+		return "", err
+	}
+
 	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
 }
 
+// linkVolume persists the library/volume link and notifies the listener
+// with the resulting per-library count. It is intentionally a tiny helper:
+// keeping the listener invocation paired with the LinkVolume call avoids
+// the easy mistake of forgetting one of the two.
+func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) error {
+	if err := lm.db.LinkVolume(libraryID, volumeID); err != nil {
+		return err
+	}
+	lm.listener.OnVolumeLinked(library, lm.db.VolumeLinkCount(library))
+	return nil
+}
+
 // RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
 // If there are no more uses of the library, it is also removed from disk.
+// Calling RemoveVolume for a volume that was never linked is a no-op.
 func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) error {
 	// Look up the linked library.
 	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
 	if err != nil {
 		return fmt.Errorf("could not determine which library was linked for volume %s: %w", volumeID, err)
+	}
+	if libraryID == "" {
+		// Nothing to do: the volume was never linked or has already been
+		// removed. We return nil here to keep idempotency.
+		return nil
+	}
+
+	// Resolve the library name now, before the link (and possibly the
+	// metadata) is wiped, so we can notify the listener with the right
+	// gauge label.
+	library, err := lm.db.PackageForLibrary(libraryID)
+	if err != nil {
+		return fmt.Errorf("could not resolve library for ID %s: %w", libraryID, err)
 	}
 
 	// Unlink the volume from the database.
@@ -269,6 +298,9 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 	err = lm.db.UnlinkVolume(libraryID, volumeID)
 	if err != nil {
 		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
+	}
+	if library != "" {
+		lm.listener.OnVolumeUnlinked(library, lm.db.VolumeLinkCount(library))
 	}
 
 	// Schedule cleanup - tryCleanupLibrary will check if the library is still in use

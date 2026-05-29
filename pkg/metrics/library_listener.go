@@ -59,16 +59,32 @@ func (*LibraryListener) OnLibraryEvicted(library string, cachedCount int, cached
 	SetLibrariesCachedBytesForLibrary(library, cachedBytes)
 }
 
+// OnVolumeLinked updates the per-library volume-links gauge.
+func (*LibraryListener) OnVolumeLinked(library string, volumeLinks int) {
+	SetLibraryVolumeLinksForLibrary(library, volumeLinks)
+}
+
+// OnVolumeUnlinked updates the per-library volume-links gauge. When the
+// last link for a library is removed the gauge is set to 0 rather than
+// deleted, so dashboards can distinguish "no volume" from "missing series".
+func (*LibraryListener) OnVolumeUnlinked(library string, volumeLinks int) {
+	SetLibraryVolumeLinksForLibrary(library, volumeLinks)
+}
+
 // OnSnapshot seeds the per-library gauges from the persisted state. Reset
 // is used so libraries that disappeared between two driver runs are not
 // stuck reporting stale values.
 func (*LibraryListener) OnSnapshot(s libraryevents.Snapshot) {
 	librariesCached.Reset()
 	librariesCachedBytes.Reset()
+	libraryVolumeLinks.Reset()
 	for library, count := range s.CachedCountByLibrary {
 		SetLibrariesCachedForLibrary(library, count)
 	}
 	for library, bytes := range s.CachedBytesByLibrary {
 		SetLibrariesCachedBytesForLibrary(library, bytes)
+	}
+	for library, links := range s.VolumeLinksByLibrary {
+		SetLibraryVolumeLinksForLibrary(library, links)
 	}
 }
