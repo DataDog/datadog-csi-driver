@@ -305,7 +305,7 @@ func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 		return fmt.Errorf("library ID cannot be blank")
 	}
 	if volumeID == "" {
-		return fmt.Errorf(" volume ID cannot be blank")
+		return fmt.Errorf("volume ID cannot be blank")
 	}
 
 	// Start a transaction.

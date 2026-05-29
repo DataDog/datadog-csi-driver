@@ -289,6 +289,32 @@ func TestDatabaseAddLibraryValidatesInputs(t *testing.T) {
 	require.Error(t, db.AddLibrary("lib", "pkg", -1), "negative size must be rejected")
 }
 
+// TestDatabaseValidatesBlankInputs asserts every public method rejects empty
+// IDs up front so a bug at the caller never silently corrupts the database
+// (e.g. linking under an empty libraryID would aggregate orphan series).
+func TestDatabaseValidatesBlankInputs(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	require.Error(t, db.LinkVolume("", "vol"), "blank libraryID must be rejected")
+	require.Error(t, db.LinkVolume("lib", ""), "blank volumeID must be rejected")
+	require.Error(t, db.UnlinkVolume("", "vol"), "blank libraryID must be rejected")
+	require.Error(t, db.UnlinkVolume("lib", ""), "blank volumeID must be rejected")
+
+	_, err = db.GetVolumeCount("")
+	require.Error(t, err, "blank libraryID must be rejected")
+	_, err = db.GetLibraryForVolume("")
+	require.Error(t, err, "blank volumeID must be rejected")
+	_, err = db.GetPackageForLibrary("")
+	require.Error(t, err, "blank libraryID must be rejected")
+
+	require.Error(t, db.RemoveLibrary(""), "blank libraryID must be rejected")
+}
+
 // mustLink is a tiny test helper that asserts LinkVolume succeeded.
 func mustLink(t *testing.T, db *librarymanager.Database, libraryID, volumeID string) {
 	t.Helper()

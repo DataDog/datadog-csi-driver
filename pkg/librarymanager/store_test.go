@@ -148,3 +148,37 @@ func TestStore(t *testing.T) {
 	require.NoError(t, err, "no error should be returned")
 }
 
+// TestStoreValidatesBlankID asserts every public method rejects an empty
+// ID, which is the only invariant a caller can break by accident.
+func TestStoreValidatesBlankID(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	store, err := librarymanager.NewStore(testFs(), filepath.Join(tsd.Path(t), "base-path"))
+	require.NoError(t, err)
+
+	_, err = store.Add("", "/tmp/whatever")
+	require.Error(t, err, "blank id must be rejected by Add")
+	_, err = store.Get("")
+	require.Error(t, err, "blank id must be rejected by Get")
+	require.Error(t, store.Remove(""), "blank id must be rejected by Remove")
+	_, err = store.Exists("")
+	require.Error(t, err, "blank id must be rejected by Exists")
+}
+
+// TestNewStoreRejectsNonDirectoryPath documents that pointing the store at
+// an existing file (a misconfiguration) surfaces as a NewStore error rather
+// than corrupting the file with a later Add.
+func TestNewStoreRejectsNonDirectoryPath(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	// Create a regular file where the store base path is supposed to live.
+	filePath := filepath.Join(tsd.Path(t), "not-a-dir")
+	require.NoError(t, os.WriteFile(filePath, []byte("placeholder"), 0o600))
+
+	store, err := librarymanager.NewStore(testFs(), filePath)
+	require.Error(t, err, "NewStore must refuse a base path that is a regular file")
+	require.Nil(t, store, "store must be nil on error")
+}
+

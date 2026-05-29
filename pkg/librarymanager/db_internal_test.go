@@ -108,3 +108,50 @@ func mustInternalLink(t *testing.T, db *Database, libraryID, volumeID string) {
 	t.Helper()
 	require.NoError(t, db.LinkVolume(libraryID, volumeID))
 }
+
+// TestNewDatabaseFailsOnCorruptedMetadata writes garbage into the metadata
+// bucket and verifies NewDatabase surfaces the unmarshal failure instead of
+// silently swallowing it. A corrupted metadata entry is the only realistic
+// way loadCaches can fail on a freshly-opened file.
+func TestNewDatabaseFailsOnCorruptedMetadata(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	dir := tsd.Path(t)
+	db, err := NewDatabase(dir)
+	require.NoError(t, err)
+
+	// Inject invalid JSON under a libraryID key.
+	require.NoError(t, db.bbolt.Update(func(tx *bbolt.Tx) error {
+		return tx.Bucket([]byte(LibraryMetadataBucket)).Put([]byte("lib-broken"), []byte("not-json"))
+	}))
+	require.NoError(t, db.Close())
+
+	// Reopening must fail at the loadCaches step.
+	_, err = NewDatabase(dir)
+	require.Error(t, err, "NewDatabase must reject a database with unparseable metadata")
+	require.Contains(t, err.Error(), "lib-broken")
+}
+
+// TestGetLibraryForVolumeWithEmptyBucket exercises the defensive
+// "bucket exists but holds no entries" branch in GetLibraryForVolume.
+// Production code does not leave behind empty volume buckets, but the
+// branch protects against future drift or partially-applied transactions.
+func TestGetLibraryForVolumeWithEmptyBucket(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Create an empty volume bucket directly without going through LinkVolume.
+	require.NoError(t, db.bbolt.Update(func(tx *bbolt.Tx) error {
+		_, err := tx.Bucket([]byte(VolumeMappingBucket)).CreateBucket([]byte("vol-empty"))
+		return err
+	}))
+
+	lib, err := db.GetLibraryForVolume("vol-empty")
+	require.NoError(t, err, "an empty volume bucket must not surface as an error")
+	require.Empty(t, lib, "an empty volume bucket must resolve to no library")
+}
