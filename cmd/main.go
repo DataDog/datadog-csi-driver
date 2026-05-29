@@ -42,7 +42,10 @@ func init() {
 	pflag.Parse()
 
 	// Bind flags to viper
-	viper.BindPFlags(pflag.CommandLine)
+	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
+		log.Error("Failed to bind flags to viper", "error", err)
+		os.Exit(1)
+	}
 
 	// Configure env var support
 	// DD_DRIVER_NAME, DD_CSI_ENDPOINT, DD_DSD_HOST_SOCKET_PATH, etc.
