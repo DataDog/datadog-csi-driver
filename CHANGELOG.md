@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - New `--registry-allow-list` flag (env: `DD_REGISTRY_ALLOW_LIST`) for `DatadogLibrary` volumes. When non-empty, only registries in the list are permitted; requests specifying an unlisted registry are rejected. Empty list (default) allows all registries.
+- New Prometheus metrics for library lifecycle observability:
+  - `datadog_csi_driver_library_resolutions_total{result}` (counter): library resolution outcomes (`cache_hit`, `downloaded`, `failed`).
+  - `datadog_csi_driver_library_download_duration_seconds{library,registry}` (histogram): time spent downloading a library from the registry.
+  - `datadog_csi_driver_library_cleanup_total{status,strategy}` (counter): cleanup attempts for unused libraries (`success`, `failed`, `skipped_in_use`).
+
+### Changed
+
+- `librarymanager` no longer depends on `pkg/metrics`. Lifecycle events are reported through a new `librarymanager.EventListener` interface; the metrics-publishing implementation lives in `pkg/metrics` and is wired in `pkg/driver`.
 
 ## [1.2.2] - 2026-04-21
 

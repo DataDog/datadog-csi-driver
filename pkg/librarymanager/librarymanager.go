@@ -46,6 +46,13 @@ type LibraryManager struct {
 	cleanupStrategy CleanupStrategy
 	// scratchDir is the directory used for scratch download space for libraries.
 	scratchDir string
+	// listener is notified of every significant lifecycle event. Defaults to
+	// a no-op so the manager can invoke it unconditionally; the production
+	// wiring (cmd/driver) passes a metrics-publishing listener from
+	// pkg/metrics. The listener handles any observability concern (metrics,
+	// audit, etc.); the manager itself stays free of any dependency on a
+	// concrete backend.
+	listener EventListener
 }
 
 // LibraryManagerOption is a functional option for configuring a LibraryManager.
@@ -73,6 +80,18 @@ func WithCleanupStrategy(s CleanupStrategy) LibraryManagerOption {
 	}
 }
 
+// WithEventListener injects an EventListener. Without this option the
+// manager uses a no-op listener; the production wiring should always pass
+// an implementation that publishes metrics (or any other observability
+// signal).
+func WithEventListener(l EventListener) LibraryManagerOption {
+	return func(lm *LibraryManager) {
+		if l != nil {
+			lm.listener = l
+		}
+	}
+}
+
 // NewLibraryManager creates a new library manager with all of the required dependencies.
 // The basePath is required as an absolute path (rather than using afero.NewBasePathFs) because
 // bind mounts need absolute paths.
@@ -83,6 +102,7 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 		downloader:      NewDownloader(),
 		locker:          NewLocker(),
 		cleanupStrategy: NewImmediateCleanupStrategy(),
+		listener:        noopEventListener{},
 	}
 
 	// Apply options.
@@ -143,6 +163,14 @@ func (lm *LibraryManager) HasVolume(volumeID string) (bool, error) {
 // GetLibraryForVolume fetches the remote library if it doesn't exist, records its usage, and returns the path on disk
 // that can be mounted for the volume.
 func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID string, lib *Library) (string, error) {
+	// Track the resolution outcome through a deferred listener call. The
+	// default "failed" reflects any early return; success paths overwrite it
+	// before returning.
+	result := LibraryResolutionFailed
+	defer func() {
+		lm.listener.OnLibraryResolved(result)
+	}()
+
 	// Validate the input.
 	if volumeID == "" {
 		return "", fmt.Errorf("volume ID cannot be empty")
@@ -174,6 +202,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
+		result = LibraryResolutionCacheHit
 		return path, nil
 	}
 
@@ -186,10 +215,12 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())
+	downloadStart := time.Now()
 	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}
+	lm.listener.OnLibraryDownload(lib.Name(), lib.Registry(), time.Since(downloadStart))
 
 	// Copy the library into the store.
 	storePath, err := lm.store.Add(libraryID, scratch)
@@ -197,6 +228,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
+	result = LibraryResolutionDownloaded
 	return storePath, nil
 }
 
@@ -227,6 +259,8 @@ func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) err
 // tryCleanupLibrary attempts to remove a library from disk if it's no longer in use.
 // It acquires the lock and checks the volume count before removing.
 func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
+	strategy := lm.cleanupStrategy.Name()
+
 	// Acquire lock to prevent race with GetLibraryForVolume
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
@@ -234,12 +268,19 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	// Check if the library is still in use
 	count, err := lm.db.GetVolumeCount(libraryID)
 	if err != nil {
+		lm.listener.OnLibraryCleanup(LibraryCleanupFailed, strategy)
 		return fmt.Errorf("could not get linked library count: %w", err)
 	}
 	if count > 0 {
 		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
+		lm.listener.OnLibraryCleanup(LibraryCleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
-	return lm.store.Remove(libraryID)
+	if err := lm.store.Remove(libraryID); err != nil {
+		lm.listener.OnLibraryCleanup(LibraryCleanupFailed, strategy)
+		return err
+	}
+	lm.listener.OnLibraryCleanup(LibraryCleanupSuccess, strategy)
+	return nil
 }
