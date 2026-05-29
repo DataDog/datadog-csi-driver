@@ -54,7 +54,7 @@ func TestDownload(t *testing.T) {
 			require.Equal(t, test.expectedDigest, digest)
 
 			// Ensure downloaded files match the expected.
-			err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
+			_, err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
 			require.NoError(t, err, "error found when downloading")
 
 			// Ensure expected files exist.

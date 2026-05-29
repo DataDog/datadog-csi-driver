@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sync"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 	"go.etcd.io/bbolt"
 )
 
@@ -22,11 +24,29 @@ const (
 	// VolumeMappingBucket is the bucket to map volumes. Conceptually, the key structure is as follows:
 	//     /volume-mappings/{{ volume_id }}/{{ library_id }}
 	VolumeMappingBucket = "volume-mappings"
+	// LibraryMetadataBucket stores per-library metadata indexed by library_id.
+	// The value is a JSON-encoded libraryMetadata. The bucket is needed
+	// because the package name is otherwise only known at the moment a
+	// library is added to the cache, and is required to publish
+	// per-package gauges after a process restart.
+	LibraryMetadataBucket = "library-metadata"
 )
 
 type linkedVolume struct{}
 
 type linkedLibrary struct{}
+
+// libraryMetadata is the value stored in LibraryMetadataBucket. The struct
+// is kept small on purpose: any field added here must be tolerant to being
+// missing on records produced by older driver versions.
+type libraryMetadata struct {
+	// Package is the canonical package name (e.g. "dd-lib-java-init") that
+	// shares its value across all versions of the same library and is used
+	// as the metric label.
+	Package string `json:"package,omitempty"`
+	// SizeBytes is the on-disk size of the library, in bytes.
+	SizeBytes int64 `json:"size_bytes,omitempty"`
+}
 
 // Database is a wrapper around bbolt with business logic for the library manager.
 //
@@ -47,6 +67,17 @@ type linkedLibrary struct{}
 // compound operations on a per-library basis.
 type Database struct {
 	bbolt *bbolt.DB
+
+	// cacheMu guards the in-memory aggregates below. They are eventually
+	// consistent with the LibraryMetadataBucket: writers take the lock just
+	// before tx.Commit() so callers that only read aggregates never block
+	// long-running bbolt transactions.
+	cacheMu sync.Mutex
+	// cachedLibrariesByPackage counts cached library IDs per package name.
+	cachedLibrariesByPackage map[string]int
+	// cachedBytesByPackage sums the on-disk size of cached libraries per
+	// package name.
+	cachedBytesByPackage map[string]int64
 }
 
 // NewDatabase initializes a new database. If a database file exists, it will re-use the existing file. Call close when
@@ -67,20 +98,227 @@ func NewDatabase(basePath string) (*Database, error) {
 		if err != nil {
 			return fmt.Errorf("failed to create bucket %s: %w", VolumeMappingBucket, err)
 		}
+		_, err = tx.CreateBucketIfNotExists([]byte(LibraryMetadataBucket))
+		if err != nil {
+			return fmt.Errorf("failed to create bucket %s: %w", LibraryMetadataBucket, err)
+		}
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not create initial buckets: %w", err)
 	}
 
-	return &Database{
-		bbolt: db,
-	}, nil
+	database := &Database{
+		bbolt:                    db,
+		cachedLibrariesByPackage: map[string]int{},
+		cachedBytesByPackage:     map[string]int64{},
+	}
+
+	// Seed the in-memory aggregates from the on-disk metadata so the
+	// listener can publish accurate gauges immediately after startup.
+	if err := database.loadCaches(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("could not load caches: %w", err)
+	}
+
+	return database, nil
+}
+
+// loadCaches scans LibraryMetadataBucket once at startup and rebuilds the
+// in-memory aggregates.
+func (db *Database) loadCaches() error {
+	return db.bbolt.View(func(tx *bbolt.Tx) error {
+		bkt := tx.Bucket([]byte(LibraryMetadataBucket))
+		if bkt == nil {
+			return nil
+		}
+		return bkt.ForEach(func(_, v []byte) error {
+			var meta libraryMetadata
+			if err := json.Unmarshal(v, &meta); err != nil {
+				return fmt.Errorf("could not unmarshal library metadata: %w", err)
+			}
+			db.cachedLibrariesByPackage[meta.Package]++
+			db.cachedBytesByPackage[meta.Package] += meta.SizeBytes
+			return nil
+		})
+	})
 }
 
 // Close will clean up the database and should be called before exiting.
 func (db *Database) Close() error {
 	return db.bbolt.Close()
+}
+
+// AddLibrary records a freshly-cached library: it persists the metadata
+// (package name + on-disk size) in LibraryMetadataBucket and updates the
+// in-memory aggregates. AddLibrary is the canonical writer for library
+// metadata; LinkVolume relies on it having been called first so that
+// per-package gauges have the right package name.
+//
+// AddLibrary is idempotent: calling it twice for the same library overwrites
+// the previous metadata (useful if the size changed) but does not
+// double-count it in the aggregates.
+func (db *Database) AddLibrary(libraryID, packageName string, sizeBytes int64) error {
+	if libraryID == "" {
+		return fmt.Errorf("library ID cannot be blank")
+	}
+	if packageName == "" {
+		return fmt.Errorf("package name cannot be blank")
+	}
+
+	tx, err := db.bbolt.Begin(true)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	bkt := tx.Bucket([]byte(LibraryMetadataBucket))
+	if bkt == nil {
+		return fmt.Errorf("library metadata bucket does not exist")
+	}
+
+	// Preserve idempotency: if the library is already recorded we must
+	// subtract the previous size from the aggregates before adding the
+	// new one.
+	var previous libraryMetadata
+	if raw := bkt.Get([]byte(libraryID)); raw != nil {
+		if err := json.Unmarshal(raw, &previous); err != nil {
+			return fmt.Errorf("could not unmarshal existing library metadata: %w", err)
+		}
+	}
+
+	meta := libraryMetadata{Package: packageName, SizeBytes: sizeBytes}
+	encoded, err := json.Marshal(&meta)
+	if err != nil {
+		return fmt.Errorf("could not marshal library metadata: %w", err)
+	}
+	if err := bkt.Put([]byte(libraryID), encoded); err != nil {
+		return fmt.Errorf("could not write library metadata: %w", err)
+	}
+
+	db.cacheMu.Lock()
+	if previous.Package != "" {
+		db.cachedLibrariesByPackage[previous.Package]--
+		db.cachedBytesByPackage[previous.Package] -= previous.SizeBytes
+		if db.cachedLibrariesByPackage[previous.Package] <= 0 {
+			delete(db.cachedLibrariesByPackage, previous.Package)
+			delete(db.cachedBytesByPackage, previous.Package)
+		}
+	}
+	db.cachedLibrariesByPackage[packageName]++
+	db.cachedBytesByPackage[packageName] += sizeBytes
+	if err := tx.Commit(); err != nil {
+		db.cacheMu.Unlock()
+		return fmt.Errorf("could not commit transaction: %w", err)
+	}
+	db.cacheMu.Unlock()
+
+	return nil
+}
+
+// RemoveLibrary removes the metadata for a library and decrements the
+// in-memory aggregates accordingly. It is a no-op if the library has no
+// metadata recorded.
+func (db *Database) RemoveLibrary(libraryID string) error {
+	if libraryID == "" {
+		return fmt.Errorf("library ID cannot be blank")
+	}
+
+	tx, err := db.bbolt.Begin(true)
+	if err != nil {
+		return fmt.Errorf("could not start transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	bkt := tx.Bucket([]byte(LibraryMetadataBucket))
+	if bkt == nil {
+		return fmt.Errorf("library metadata bucket does not exist")
+	}
+
+	raw := bkt.Get([]byte(libraryID))
+	if raw == nil {
+		return nil
+	}
+	var meta libraryMetadata
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return fmt.Errorf("could not unmarshal library metadata: %w", err)
+	}
+	if err := bkt.Delete([]byte(libraryID)); err != nil {
+		return fmt.Errorf("could not delete library metadata: %w", err)
+	}
+
+	db.cacheMu.Lock()
+	db.cachedLibrariesByPackage[meta.Package]--
+	db.cachedBytesByPackage[meta.Package] -= meta.SizeBytes
+	if db.cachedLibrariesByPackage[meta.Package] <= 0 {
+		delete(db.cachedLibrariesByPackage, meta.Package)
+		delete(db.cachedBytesByPackage, meta.Package)
+	}
+	if err := tx.Commit(); err != nil {
+		db.cacheMu.Unlock()
+		return fmt.Errorf("could not commit transaction: %w", err)
+	}
+	db.cacheMu.Unlock()
+
+	return nil
+}
+
+// PackageCacheStats returns the current cached-library count and the total
+// on-disk size, in bytes, for a given package name. Both values are zero
+// when the package has no cached library.
+func (db *Database) PackageCacheStats(packageName string) (int, int64) {
+	db.cacheMu.Lock()
+	defer db.cacheMu.Unlock()
+	return db.cachedLibrariesByPackage[packageName], db.cachedBytesByPackage[packageName]
+}
+
+// PackageForLibrary returns the package name recorded for a library, or an
+// empty string when the library has no metadata (for instance because it
+// was added by an older driver version that did not yet persist
+// per-library metadata).
+func (db *Database) PackageForLibrary(libraryID string) (string, error) {
+	if libraryID == "" {
+		return "", fmt.Errorf("library ID cannot be blank")
+	}
+
+	var pkg string
+	err := db.bbolt.View(func(tx *bbolt.Tx) error {
+		bkt := tx.Bucket([]byte(LibraryMetadataBucket))
+		if bkt == nil {
+			return nil
+		}
+		raw := bkt.Get([]byte(libraryID))
+		if raw == nil {
+			return nil
+		}
+		var meta libraryMetadata
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			return fmt.Errorf("could not unmarshal library metadata: %w", err)
+		}
+		pkg = meta.Package
+		return nil
+	})
+	return pkg, err
+}
+
+// Snapshot returns a consistent snapshot of every aggregate the listener
+// needs to publish gauges. The returned maps are owned by the caller and
+// safe to retain.
+func (db *Database) Snapshot() libraryevents.Snapshot {
+	db.cacheMu.Lock()
+	defer db.cacheMu.Unlock()
+	cachedCount := make(map[string]int, len(db.cachedLibrariesByPackage))
+	for pkg, n := range db.cachedLibrariesByPackage {
+		cachedCount[pkg] = n
+	}
+	cachedBytes := make(map[string]int64, len(db.cachedBytesByPackage))
+	for pkg, n := range db.cachedBytesByPackage {
+		cachedBytes[pkg] = n
+	}
+	return libraryevents.Snapshot{
+		CachedCountByPackage: cachedCount,
+		CachedBytesByPackage: cachedBytes,
+	}
 }
 
 // LinkVolume creates a bidrectional mapping between the library and volume.

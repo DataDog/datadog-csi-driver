@@ -143,6 +143,11 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 	// Setup cache.
 	lm.cache = NewImageCache(lm.downloader, DefaultImageCacheTTL)
 
+	// Seed listener gauges from the persisted state, so dashboards reflect
+	// reality immediately after a driver restart instead of waiting for the
+	// first event.
+	lm.listener.OnSnapshot(lm.db.Snapshot())
+
 	return lm, nil
 }
 
@@ -217,7 +222,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())
 	downloadStart := time.Now()
-	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
+	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}
@@ -229,6 +234,17 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
+
+	// Record the library in the metadata bucket and notify the listener.
+	// AddLibrary is the canonical writer for the per-library metadata; it
+	// must be called before any consumer relies on the package name being
+	// available for the given library ID.
+	if err := lm.db.AddLibrary(libraryID, lib.Name(), sizeBytes); err != nil {
+		return "", fmt.Errorf("could not record library metadata: %w", err)
+	}
+	count, totalBytes := lm.db.PackageCacheStats(lib.Name())
+	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
+
 	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
 }
@@ -278,9 +294,29 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
+
+	// Look up the package name before the metadata is wiped so we can
+	// notify the listener with the right gauge label. Older libraries on
+	// disk that predate the metadata bucket return an empty string here;
+	// for those the cached gauges are skipped, since we never tracked them
+	// in the first place.
+	packageName, err := lm.db.PackageForLibrary(libraryID)
+	if err != nil {
+		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		return fmt.Errorf("could not get package for library %s: %w", libraryID, err)
+	}
+
 	if err := lm.store.Remove(libraryID); err != nil {
 		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
 		return err
+	}
+	if err := lm.db.RemoveLibrary(libraryID); err != nil {
+		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		return fmt.Errorf("could not remove library metadata for %s: %w", libraryID, err)
+	}
+	if packageName != "" {
+		newCount, newBytes := lm.db.PackageCacheStats(packageName)
+		lm.listener.OnLibraryEvicted(packageName, newCount, newBytes)
 	}
 	lm.listener.OnLibraryCleanup(libraryevents.CleanupSuccess, strategy)
 	return nil

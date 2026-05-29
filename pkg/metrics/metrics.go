@@ -49,6 +49,13 @@ func newHistogramVec(name, help string, buckets []float64, labels ...string) *pr
 	}, labels)
 }
 
+func newGaugeVec(name, help string, labels ...string) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: subsystem + separator + name,
+		Help: help,
+	}, labels)
+}
+
 var nodeVolumeMountAttempts = newCounterVec(
 	"node_publish_volume_attempts",
 	"Counts the number of publish volume requests received by the csi node server",
@@ -84,12 +91,26 @@ var libraryCleanup = newCounterVec(
 	"strategy",
 )
 
+var librariesCached = newGaugeVec(
+	"libraries_cached",
+	"Number of library versions currently stored on disk, per package",
+	"library",
+)
+
+var librariesCachedBytes = newGaugeVec(
+	"libraries_cached_bytes",
+	"Cumulative on-disk size of cached libraries, in bytes, per package",
+	"library",
+)
+
 func init() {
 	prometheus.MustRegister(nodeVolumeMountAttempts)
 	prometheus.MustRegister(nodeVolumeUnmountAttempts)
 	prometheus.MustRegister(libraryResolutions)
 	prometheus.MustRegister(libraryDownloadDuration)
 	prometheus.MustRegister(libraryCleanup)
+	prometheus.MustRegister(librariesCached)
+	prometheus.MustRegister(librariesCachedBytes)
 }
 
 // RecordVolumeMountAttempt records a volume mount attempt
@@ -117,4 +138,15 @@ func ObserveLibraryDownloadDuration(library, registry string, d time.Duration) {
 // The strategy label captures which cleanup policy was active (e.g. "immediate", "delayed").
 func RecordLibraryCleanup(status libraryevents.CleanupStatus, strategy string) {
 	libraryCleanup.WithLabelValues(string(status), strategy).Inc()
+}
+
+// SetLibrariesCachedForPackage sets the number of cached library versions for a package.
+func SetLibrariesCachedForPackage(library string, count int) {
+	librariesCached.WithLabelValues(library).Set(float64(count))
+}
+
+// SetLibrariesCachedBytesForPackage sets the cumulative on-disk size of cached libraries
+// for a given package, in bytes.
+func SetLibrariesCachedBytesForPackage(library string, bytes int64) {
+	librariesCachedBytes.WithLabelValues(library).Set(float64(bytes))
 }

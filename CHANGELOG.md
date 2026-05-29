@@ -14,10 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `datadog_csi_driver_library_resolutions_total{result}` (counter): library resolution outcomes (`cache_hit`, `downloaded`, `failed`).
   - `datadog_csi_driver_library_download_duration_seconds{library,registry}` (histogram): time spent downloading a library from the registry.
   - `datadog_csi_driver_library_cleanup_total{status,strategy}` (counter): cleanup attempts for unused libraries (`success`, `failed`, `skipped_in_use`).
+  - `datadog_csi_driver_libraries_cached{library}` (gauge): number of library versions currently stored on disk, per package.
+  - `datadog_csi_driver_libraries_cached_bytes{library}` (gauge): cumulative on-disk size, in bytes, of cached libraries per package.
+- New `library-metadata` bucket in the on-disk bbolt database, storing the package name and on-disk size for each cached library. Required to publish per-package gauges across restarts.
 
 ### Changed
 
 - `librarymanager` no longer depends on `pkg/metrics`. Lifecycle events are reported through a new `libraryevents.Listener` interface defined in a dedicated, dependency-free `pkg/libraryevents` package; the metrics-publishing implementation lives in `pkg/metrics` and is wired in `pkg/driver`.
+
+### Notes
+
+- Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.
 
 ## [1.2.2] - 2026-04-21
 

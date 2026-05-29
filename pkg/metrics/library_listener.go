@@ -40,3 +40,35 @@ func (*LibraryListener) OnLibraryDownload(library, registry string, duration tim
 func (*LibraryListener) OnLibraryCleanup(status libraryevents.CleanupStatus, strategy string) {
 	RecordLibraryCleanup(status, strategy)
 }
+
+// OnLibraryCached updates the per-package cached gauges with the new
+// aggregate values reported by the manager. The manager guarantees the
+// counts are post-update.
+func (*LibraryListener) OnLibraryCached(packageName string, cachedCount int, cachedBytes int64) {
+	SetLibrariesCachedForPackage(packageName, cachedCount)
+	SetLibrariesCachedBytesForPackage(packageName, cachedBytes)
+}
+
+// OnLibraryEvicted updates the per-package cached gauges with the new
+// aggregate values reported by the manager. When the last version of a
+// package is evicted both counts are zero, which materialises in
+// Prometheus as a series of value 0 (kept intentionally so dashboards can
+// show "cache is empty" rather than gap).
+func (*LibraryListener) OnLibraryEvicted(packageName string, cachedCount int, cachedBytes int64) {
+	SetLibrariesCachedForPackage(packageName, cachedCount)
+	SetLibrariesCachedBytesForPackage(packageName, cachedBytes)
+}
+
+// OnSnapshot seeds the per-package gauges from the persisted state. Reset
+// is used so packages that disappeared between two driver runs are not
+// stuck reporting stale values.
+func (*LibraryListener) OnSnapshot(s libraryevents.Snapshot) {
+	librariesCached.Reset()
+	librariesCachedBytes.Reset()
+	for pkg, count := range s.CachedCountByPackage {
+		SetLibrariesCachedForPackage(pkg, count)
+	}
+	for pkg, bytes := range s.CachedBytesByPackage {
+		SetLibrariesCachedBytesForPackage(pkg, bytes)
+	}
+}

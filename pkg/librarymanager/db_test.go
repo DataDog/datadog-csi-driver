@@ -90,3 +90,96 @@ func TestDatabase(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, lib, "there should be no libs linked")
 }
+
+func TestDatabaseLibraryMetadata(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// A package with no cached library reports zero stats and an empty package name.
+	count, bytes := db.PackageCacheStats("unknown")
+	require.Equal(t, 0, count)
+	require.Equal(t, int64(0), bytes)
+
+	pkg, err := db.PackageForLibrary("unknown")
+	require.NoError(t, err)
+	require.Empty(t, pkg)
+
+	// Two versions of the same package aggregate together.
+	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 100))
+	require.NoError(t, db.AddLibrary("lib-id-2", "dd-lib-java-init", 200))
+	count, bytes = db.PackageCacheStats("dd-lib-java-init")
+	require.Equal(t, 2, count)
+	require.Equal(t, int64(300), bytes)
+
+	pkg, err = db.PackageForLibrary("lib-id-1")
+	require.NoError(t, err)
+	require.Equal(t, "dd-lib-java-init", pkg)
+
+	// AddLibrary on the same library ID is idempotent: it overwrites the
+	// previous record without double-counting.
+	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 150))
+	count, bytes = db.PackageCacheStats("dd-lib-java-init")
+	require.Equal(t, 2, count)
+	require.Equal(t, int64(350), bytes)
+
+	// A different package is tracked independently.
+	require.NoError(t, db.AddLibrary("php-id", "dd-lib-php-init", 42))
+	snap := db.Snapshot()
+	require.Equal(t, 2, snap.CachedCountByPackage["dd-lib-java-init"])
+	require.Equal(t, int64(350), snap.CachedBytesByPackage["dd-lib-java-init"])
+	require.Equal(t, 1, snap.CachedCountByPackage["dd-lib-php-init"])
+	require.Equal(t, int64(42), snap.CachedBytesByPackage["dd-lib-php-init"])
+
+	// Removing one of two versions keeps the package present.
+	require.NoError(t, db.RemoveLibrary("lib-id-1"))
+	count, bytes = db.PackageCacheStats("dd-lib-java-init")
+	require.Equal(t, 1, count)
+	require.Equal(t, int64(200), bytes)
+
+	// Removing the last version drops the package entry from the aggregates.
+	require.NoError(t, db.RemoveLibrary("lib-id-2"))
+	count, bytes = db.PackageCacheStats("dd-lib-java-init")
+	require.Equal(t, 0, count)
+	require.Equal(t, int64(0), bytes)
+
+	// RemoveLibrary is a no-op on an unknown library.
+	require.NoError(t, db.RemoveLibrary("never-existed"))
+}
+
+func TestDatabaseMetadataPersistsAcrossRestart(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 1024))
+	require.NoError(t, db.Close())
+
+	// Reopen and verify the aggregates were rebuilt from the persisted state.
+	db2, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db2.Close()
+
+	count, bytes := db2.PackageCacheStats("dd-lib-java-init")
+	require.Equal(t, 1, count)
+	require.Equal(t, int64(1024), bytes)
+}
+
+func TestDatabaseValidatesBlankInputsForMetadata(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	require.Error(t, db.AddLibrary("", "pkg", 0))
+	require.Error(t, db.AddLibrary("lib", "", 0))
+	require.Error(t, db.RemoveLibrary(""))
+	_, err = db.PackageForLibrary("")
+	require.Error(t, err)
+}

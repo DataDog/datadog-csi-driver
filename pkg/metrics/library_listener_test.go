@@ -44,3 +44,39 @@ func TestLibraryListenerPublishesResolutionAndCleanup(t *testing.T) {
 	// exists for the right labels (bucket layout is tested elsewhere).
 	require.Equal(t, 1, testutil.CollectAndCount(libraryDownloadDuration))
 }
+
+func TestLibraryListenerCachedAndEvictedSetGauges(t *testing.T) {
+	librariesCached.Reset()
+	librariesCachedBytes.Reset()
+
+	l := NewLibraryListener()
+	l.OnLibraryCached("dd-lib-java-init", 2, 1024)
+	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1024), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+
+	// Evicting back to zero leaves the series at 0 so dashboards do not see a gap.
+	l.OnLibraryEvicted("dd-lib-java-init", 0, 0)
+	require.Equal(t, float64(0), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(0), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+}
+
+func TestLibraryListenerOnSnapshotSeedsGauges(t *testing.T) {
+	librariesCached.Reset()
+	librariesCachedBytes.Reset()
+
+	// Pre-existing stale series should be wiped by Reset inside OnSnapshot.
+	librariesCached.WithLabelValues("stale").Set(7)
+
+	l := NewLibraryListener()
+	l.OnSnapshot(libraryevents.Snapshot{
+		CachedCountByPackage: map[string]int{"dd-lib-java-init": 2, "dd-lib-php-init": 1},
+		CachedBytesByPackage: map[string]int64{"dd-lib-java-init": 4096, "dd-lib-php-init": 64},
+	})
+
+	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(4096), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-java-init")))
+	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-php-init")))
+	require.Equal(t, float64(64), testutil.ToFloat64(librariesCachedBytes.WithLabelValues("dd-lib-php-init")))
+
+	require.Equal(t, 2, testutil.CollectAndCount(librariesCached), "stale series should be evicted")
+}
