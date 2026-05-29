@@ -30,6 +30,21 @@ const (
 	LibraryCleanupSkippedInUse LibraryCleanupStatus = "skipped_in_use"
 )
 
+// Snapshot is the full per-package state captured atomically from the
+// database. Used by EventListener.OnSnapshot to seed stateful gauges at
+// startup. The maps are owned by the caller and must not be retained.
+type Snapshot struct {
+	// VolumeLinksByPackage is the number of volumes currently linked to
+	// each package.
+	VolumeLinksByPackage map[string]int
+	// CachedCountByPackage is the number of library versions currently
+	// cached on disk for each package.
+	CachedCountByPackage map[string]int
+	// CachedBytesByPackage is the total on-disk size in bytes of the
+	// cached library versions for each package.
+	CachedBytesByPackage map[string]int64
+}
+
 // EventListener is notified by the LibraryManager of significant lifecycle
 // events. The interface is deliberately observability-agnostic: the default
 // implementation is a no-op (see noopEventListener) and the production code
@@ -80,11 +95,10 @@ type EventListener interface {
 	// OnSnapshot is called once at LibraryManager startup with the full
 	// per-package aggregates rebuilt from the persisted state. Listeners
 	// publishing stateful gauges should overwrite the gauge values from
-	// this snapshot so monitors and dashboards reflect reality immediately
+	// the snapshot so monitors and dashboards reflect reality immediately
 	// after a restart, without waiting for the first lifecycle event to
-	// flow through. Maps are read-only snapshots owned by the caller and
-	// must not be retained by the listener.
-	OnSnapshot(volumeLinksByPackage, cachedCountByPackage map[string]int, cachedBytesByPackage map[string]int64)
+	// flow through.
+	OnSnapshot(s Snapshot)
 }
 
 // noopEventListener is the default listener used when no observer is
@@ -92,11 +106,11 @@ type EventListener interface {
 // listener unconditionally and keep the call sites clean.
 type noopEventListener struct{}
 
-func (noopEventListener) OnLibraryResolved(LibraryResolutionResult)             {}
-func (noopEventListener) OnLibraryDownload(string, string, time.Duration)       {}
-func (noopEventListener) OnLibraryCleanup(LibraryCleanupStatus, string)         {}
-func (noopEventListener) OnVolumeLinked(string, int)                            {}
-func (noopEventListener) OnVolumeUnlinked(string, int)                          {}
-func (noopEventListener) OnLibraryCached(string, int, int64)                    {}
-func (noopEventListener) OnLibraryEvicted(string, int, int64)                   {}
-func (noopEventListener) OnSnapshot(map[string]int, map[string]int, map[string]int64) {}
+func (noopEventListener) OnLibraryResolved(LibraryResolutionResult)       {}
+func (noopEventListener) OnLibraryDownload(string, string, time.Duration) {}
+func (noopEventListener) OnLibraryCleanup(LibraryCleanupStatus, string)   {}
+func (noopEventListener) OnVolumeLinked(string, int)                      {}
+func (noopEventListener) OnVolumeUnlinked(string, int)                    {}
+func (noopEventListener) OnLibraryCached(string, int, int64)              {}
+func (noopEventListener) OnLibraryEvicted(string, int, int64)             {}
+func (noopEventListener) OnSnapshot(Snapshot)                             {}

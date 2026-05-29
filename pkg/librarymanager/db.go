@@ -282,9 +282,8 @@ func (db *Database) LinkVolume(libraryID string, volumeID string) error {
 		return fmt.Errorf("could not assign volume with id %s: %w", volumeID, err)
 	}
 
-	// Hold cacheMu across Commit and the in-memory aggregate update so
-	// concurrent readers cannot observe the post-commit bbolt state before
-	// the cache catches up.
+	// Hold cacheMu across Commit and the cache update so readers never
+	// observe bbolt and the in-memory aggregates disagree.
 	db.cacheMu.Lock()
 	defer db.cacheMu.Unlock()
 
@@ -374,10 +373,7 @@ func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 		}
 	}
 
-	// Hold cacheMu across Commit and the cache update so any reader that
-	// observes the post-commit bbolt state is forced to wait for the cache
-	// to catch up before it can read it. The bbolt work above ran without
-	// the lock since bbolt already serializes writers.
+	// See LinkVolume for the cacheMu/Commit ordering rationale.
 	db.cacheMu.Lock()
 	defer db.cacheMu.Unlock()
 
@@ -550,27 +546,28 @@ func (db *Database) VolumeLinkCount(pkg string) int {
 	return db.volumeLinksByPackage[pkg]
 }
 
-// Snapshot returns copies of the per-package aggregates: volume link counts,
-// cached library counts and cached library bytes. Used by observers that want
-// to resync without going through bbolt themselves (e.g. metrics listeners on
-// startup). The three maps are captured under a single lock so they reflect a
-// consistent point-in-time view.
-func (db *Database) Snapshot() (volumeLinks map[string]int, cachedCounts map[string]int, cachedBytes map[string]int64) {
+// Snapshot returns a deep copy of the per-package aggregates captured under a
+// single lock so the three maps reflect a consistent point-in-time view.
+// Used by observers that want to resync without going through bbolt
+// themselves (e.g. metrics listeners on startup).
+func (db *Database) Snapshot() Snapshot {
 	db.cacheMu.Lock()
 	defer db.cacheMu.Unlock()
-	volumeLinks = make(map[string]int, len(db.volumeLinksByPackage))
+	s := Snapshot{
+		VolumeLinksByPackage: make(map[string]int, len(db.volumeLinksByPackage)),
+		CachedCountByPackage: make(map[string]int, len(db.cachedCountByPackage)),
+		CachedBytesByPackage: make(map[string]int64, len(db.cachedBytesByPackage)),
+	}
 	for k, v := range db.volumeLinksByPackage {
-		volumeLinks[k] = v
+		s.VolumeLinksByPackage[k] = v
 	}
-	cachedCounts = make(map[string]int, len(db.cachedCountByPackage))
 	for k, v := range db.cachedCountByPackage {
-		cachedCounts[k] = v
+		s.CachedCountByPackage[k] = v
 	}
-	cachedBytes = make(map[string]int64, len(db.cachedBytesByPackage))
 	for k, v := range db.cachedBytesByPackage {
-		cachedBytes[k] = v
+		s.CachedBytesByPackage[k] = v
 	}
-	return volumeLinks, cachedCounts, cachedBytes
+	return s
 }
 
 // updateVolumeLinked mirrors a new (library, volume) link in the in-memory

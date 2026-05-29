@@ -97,11 +97,11 @@ func TestLibraryListenerOnSnapshotResetsGauges(t *testing.T) {
 
 	// A snapshot that no longer mentions "stale-package" must drop it from
 	// every gauge while bringing the kept series back to the snapshot value.
-	l.OnSnapshot(
-		map[string]int{"dd-lib-java-init": 5},
-		map[string]int{"dd-lib-java-init": 1},
-		map[string]int64{"dd-lib-java-init": 42},
-	)
+	l.OnSnapshot(librarymanager.Snapshot{
+		VolumeLinksByPackage: map[string]int{"dd-lib-java-init": 5},
+		CachedCountByPackage: map[string]int{"dd-lib-java-init": 1},
+		CachedBytesByPackage: map[string]int64{"dd-lib-java-init": 42},
+	})
 
 	require.Equal(t, float64(5), testutil.ToFloat64(libraryVolumeLinks.WithLabelValues("dd-lib-java-init")))
 	require.Equal(t, float64(1), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))

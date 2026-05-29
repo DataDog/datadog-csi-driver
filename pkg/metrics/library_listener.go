@@ -74,11 +74,20 @@ func (*LibraryListener) OnLibraryEvicted(pkg string, packageCachedCount int, pac
 }
 
 // OnSnapshot resets the stateful gauges to match the persisted state at
-// startup. Using the bulk Set helpers ensures any series that disappeared
-// while the driver was down (e.g. a package no longer cached) is cleared
-// rather than left at its pre-restart value.
-func (*LibraryListener) OnSnapshot(volumeLinksByPackage, cachedCountByPackage map[string]int, cachedBytesByPackage map[string]int64) {
-	SetLibraryVolumeLinks(volumeLinksByPackage)
-	SetLibrariesCached(cachedCountByPackage)
-	SetLibrariesCachedBytes(cachedBytesByPackage)
+// startup. The Reset before each fan-out ensures any series that
+// disappeared while the driver was down (e.g. a package no longer cached)
+// is cleared rather than left at its pre-restart value.
+func (*LibraryListener) OnSnapshot(s librarymanager.Snapshot) {
+	libraryVolumeLinks.Reset()
+	for pkg, n := range s.VolumeLinksByPackage {
+		SetLibraryVolumeLinksForPackage(pkg, n)
+	}
+	librariesCached.Reset()
+	for pkg, n := range s.CachedCountByPackage {
+		SetLibrariesCachedForPackage(pkg, n)
+	}
+	librariesCachedBytes.Reset()
+	for pkg, n := range s.CachedBytesByPackage {
+		SetLibrariesCachedBytesForPackage(pkg, n)
+	}
 }

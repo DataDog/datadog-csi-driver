@@ -63,8 +63,7 @@ func TestNewDatabaseRecoversFromMissingMetadataBucket(t *testing.T) {
 	// Pre-migration links are surfaced under an empty package label until
 	// the library is re-registered. Tagging the gauge series with "" lets
 	// observers remap it to "unknown" at publish time.
-	volumeLinks, _, _ := db2.Snapshot()
-	require.Equal(t, map[string]int{"": 2}, volumeLinks,
+	require.Equal(t, map[string]int{"": 2}, db2.Snapshot().VolumeLinksByPackage,
 		"links carried over from the old layout must be counted under an empty package")
 
 	// Re-registering the library (e.g. at the next download) sets the
@@ -75,8 +74,7 @@ func TestNewDatabaseRecoversFromMissingMetadataBucket(t *testing.T) {
 	pkg, err = db2.GetPackageForLibrary("lib-java")
 	require.NoError(t, err)
 	require.Equal(t, "dd-lib-java-init", pkg)
-	volumeLinks, _, _ = db2.Snapshot()
-	require.Equal(t, map[string]int{"": 2, "dd-lib-java-init": 1}, volumeLinks,
+	require.Equal(t, map[string]int{"": 2, "dd-lib-java-init": 1}, db2.Snapshot().VolumeLinksByPackage,
 		"only the post-migration link is moved to the package aggregate")
 }
 

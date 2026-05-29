@@ -174,81 +174,22 @@ func RecordLibraryCleanup(status CleanupStatus, strategy string) {
 // typically for entries persisted by an older driver version.
 const UnknownLibrary = "unknown"
 
-// SetLibraryVolumeLinks replaces the full set of library_volume_links series with
-// the provided counts. Packages missing from counts are removed from the gauge so
-// stale series do not linger after a library becomes unused.
-// Empty package names are reported under "unknown".
-//
-// This performs a Reset followed by a Set per entry, which is acceptable at
-// startup but should be avoided on the hot path because a concurrent scrape
-// could observe a transient empty state. Prefer SetLibraryVolumeLinksForPackage
-// / DeleteLibraryVolumeLinksForPackage to update a single series.
-func SetLibraryVolumeLinks(countsByPackage map[string]int) {
-	libraryVolumeLinks.Reset()
-	for pkg, n := range countsByPackage {
-		libraryVolumeLinks.WithLabelValues(libraryLabel(pkg)).Set(float64(n))
-	}
-}
-
-// SetLibraryVolumeLinksForPackage sets the gauge value for a single package without
-// touching the other series, which is safe to call from the request hot path.
-// Empty package names are reported under "unknown".
+// SetLibraryVolumeLinksForPackage sets the library_volume_links gauge for a
+// single package. Empty package names are reported under "unknown".
 func SetLibraryVolumeLinksForPackage(library string, n int) {
 	libraryVolumeLinks.WithLabelValues(libraryLabel(library)).Set(float64(n))
 }
 
-// DeleteLibraryVolumeLinksForPackage removes the series for a single package.
-// The normal lifecycle keeps zero-valued series (see metricsTracker) so that
-// the "no volumes" state is observable; this helper is reserved for explicit
-// cleanups, e.g. when the library is purged from disk and we no longer want
-// to report on it at all.
-func DeleteLibraryVolumeLinksForPackage(library string) {
-	libraryVolumeLinks.DeleteLabelValues(libraryLabel(library))
-}
-
-// SetLibrariesCached replaces the full set of libraries_cached series with the
-// provided counts. See SetLibraryVolumeLinks for the same caveats around the
-// transient empty state during the Reset; prefer the per-package helpers on
-// the hot path.
-func SetLibrariesCached(countsByPackage map[string]int) {
-	librariesCached.Reset()
-	for pkg, n := range countsByPackage {
-		librariesCached.WithLabelValues(libraryLabel(pkg)).Set(float64(n))
-	}
-}
-
-// SetLibrariesCachedForPackage sets the libraries_cached gauge value for a
-// single package without touching the other series.
+// SetLibrariesCachedForPackage sets the libraries_cached gauge for a single
+// package. Empty package names are reported under "unknown".
 func SetLibrariesCachedForPackage(library string, n int) {
 	librariesCached.WithLabelValues(libraryLabel(library)).Set(float64(n))
 }
 
-// DeleteLibrariesCachedForPackage removes the libraries_cached series for a
-// single package. Like DeleteLibraryVolumeLinksForPackage, this is reserved
-// for explicit cleanups; the normal lifecycle keeps zero-valued series.
-func DeleteLibrariesCachedForPackage(library string) {
-	librariesCached.DeleteLabelValues(libraryLabel(library))
-}
-
-// SetLibrariesCachedBytes replaces the full set of libraries_cached_bytes
-// series with the provided byte totals. See SetLibrariesCached for caveats.
-func SetLibrariesCachedBytes(bytesByPackage map[string]int64) {
-	librariesCachedBytes.Reset()
-	for pkg, n := range bytesByPackage {
-		librariesCachedBytes.WithLabelValues(libraryLabel(pkg)).Set(float64(n))
-	}
-}
-
 // SetLibrariesCachedBytesForPackage sets the libraries_cached_bytes gauge
-// value for a single package without touching the other series.
+// for a single package. Empty package names are reported under "unknown".
 func SetLibrariesCachedBytesForPackage(library string, sizeBytes int64) {
 	librariesCachedBytes.WithLabelValues(libraryLabel(library)).Set(float64(sizeBytes))
-}
-
-// DeleteLibrariesCachedBytesForPackage removes the libraries_cached_bytes
-// series for a single package. Reserved for explicit cleanups.
-func DeleteLibrariesCachedBytesForPackage(library string) {
-	librariesCachedBytes.DeleteLabelValues(libraryLabel(library))
 }
 
 // libraryLabel maps an empty package name to the "unknown" sentinel used for

@@ -110,11 +110,10 @@ func TestDatabasePackageTracking(t *testing.T) {
 	mustLink(t, db, "lib-java", "vol-2")
 	mustLink(t, db, "lib-php", "vol-3")
 
-	volumeLinks, _, _ := db.Snapshot()
 	require.Equal(t, map[string]int{
 		"dd-lib-java-init": 2,
 		"dd-lib-php-init":  1,
-	}, volumeLinks)
+	}, db.Snapshot().VolumeLinksByPackage)
 
 	pkg, err := db.GetPackageForLibrary("lib-java")
 	require.NoError(t, err)
@@ -133,11 +132,10 @@ func TestDatabasePackageTracking(t *testing.T) {
 	// entry is kept in the snapshot at zero rather than removed: dashboards
 	// can then observe the "no volumes" transition explicitly.
 	require.NoError(t, db.UnlinkVolume("lib-php", "vol-3"))
-	volumeLinks, _, _ = db.Snapshot()
 	require.Equal(t, map[string]int{
 		"dd-lib-java-init": 2,
 		"dd-lib-php-init":  0,
-	}, volumeLinks)
+	}, db.Snapshot().VolumeLinksByPackage)
 }
 
 func TestDatabaseLinkWithoutRegistrationFallsBackToEmptyPackage(t *testing.T) {
@@ -152,8 +150,7 @@ func TestDatabaseLinkWithoutRegistrationFallsBackToEmptyPackage(t *testing.T) {
 	// AddLibrary has run, so no Package is registered.
 	mustLink(t, db, "lib-legacy", "vol-legacy")
 
-	volumeLinks, _, _ := db.Snapshot()
-	require.Equal(t, map[string]int{"": 1}, volumeLinks, "unregistered libraries surface under the empty key")
+	require.Equal(t, map[string]int{"": 1}, db.Snapshot().VolumeLinksByPackage, "unregistered libraries surface under the empty key")
 
 	pkg, err := db.GetPackageForLibrary("lib-legacy")
 	require.NoError(t, err)
@@ -172,9 +169,9 @@ func TestDatabaseLibraryMetadataCacheLifecycle(t *testing.T) {
 	// upgrade-from-pre-feature scenario: no Package or cache state is
 	// registered.
 	mustLink(t, db, "lib-java", "vol-1")
-	_, counts, bytes := db.Snapshot()
-	require.Empty(t, counts)
-	require.Empty(t, bytes)
+	snap := db.Snapshot()
+	require.Empty(t, snap.CachedCountByPackage)
+	require.Empty(t, snap.CachedBytesByPackage)
 
 	// First AddLibrary registers the package and publishes the
 	// library at its measured size.
@@ -183,9 +180,9 @@ func TestDatabaseLibraryMetadataCacheLifecycle(t *testing.T) {
 	require.Equal(t, 1, count)
 	require.Equal(t, int64(12_345), byteTotal)
 
-	_, counts, bytes = db.Snapshot()
-	require.Equal(t, map[string]int{"dd-lib-java-init": 1}, counts)
-	require.Equal(t, map[string]int64{"dd-lib-java-init": 12_345}, bytes)
+	snap = db.Snapshot()
+	require.Equal(t, map[string]int{"dd-lib-java-init": 1}, snap.CachedCountByPackage)
+	require.Equal(t, map[string]int64{"dd-lib-java-init": 12_345}, snap.CachedBytesByPackage)
 
 	// Re-caching the same library replaces the size, not the count. This is
 	// a defensive path for any future in-place re-cache; the package totals
@@ -195,8 +192,7 @@ func TestDatabaseLibraryMetadataCacheLifecycle(t *testing.T) {
 	require.Equal(t, 1, count, "re-caching must not bump the package count")
 	require.Equal(t, int64(99_999), byteTotal)
 
-	_, _, bytes = db.Snapshot()
-	require.Equal(t, map[string]int64{"dd-lib-java-init": 99_999}, bytes)
+	require.Equal(t, map[string]int64{"dd-lib-java-init": 99_999}, db.Snapshot().CachedBytesByPackage)
 
 	// RemoveLibrary drops the cache state and wipes the metadata entry.
 	require.NoError(t, db.RemoveLibrary("lib-java"))
@@ -221,9 +217,9 @@ func TestDatabaseRemoveLibraryUnknownIsNoop(t *testing.T) {
 	// snapshot and must not materialize a metadata entry for it.
 	require.NoError(t, db.RemoveLibrary("lib-unknown"))
 
-	_, counts, bytes := db.Snapshot()
-	require.Empty(t, counts)
-	require.Empty(t, bytes)
+	snap := db.Snapshot()
+	require.Empty(t, snap.CachedCountByPackage)
+	require.Empty(t, snap.CachedBytesByPackage)
 
 	pkg, err := db.GetPackageForLibrary("lib-unknown")
 	require.NoError(t, err)
@@ -255,24 +251,21 @@ func TestDatabaseAggregatesAcrossMultipleVersionsOfTheSamePackage(t *testing.T) 
 	require.NoError(t, db.AddLibrary(php82, phpPackage, 5_500_000))
 	mustLink(t, db, php82, "vol-c")
 
-	volumeLinks, _, _ := db.Snapshot()
-	require.Equal(t, map[string]int{phpPackage: 3}, volumeLinks,
+	snap := db.Snapshot()
+	require.Equal(t, map[string]int{phpPackage: 3}, snap.VolumeLinksByPackage,
 		"volume links must be summed across every version of the same package")
+	require.Equal(t, map[string]int{phpPackage: 2}, snap.CachedCountByPackage)
+	require.Equal(t, map[string]int64{phpPackage: 10_500_000}, snap.CachedBytesByPackage)
 
 	count, bytesTotal := db.PackageCacheStats(phpPackage)
 	require.Equal(t, 2, count, "the package must count both cached versions")
 	require.Equal(t, int64(10_500_000), bytesTotal, "package bytes must sum every cached version")
 
-	_, counts, bytes := db.Snapshot()
-	require.Equal(t, map[string]int{phpPackage: 2}, counts)
-	require.Equal(t, map[string]int64{phpPackage: 10_500_000}, bytes)
-
 	// Unlinking the volumes of one version drops the link count for the
 	// package by one each; the package label stays the same.
 	require.NoError(t, db.UnlinkVolume(php81, "vol-a"))
 	require.NoError(t, db.UnlinkVolume(php81, "vol-b"))
-	volumeLinks, _, _ = db.Snapshot()
-	require.Equal(t, map[string]int{phpPackage: 1}, volumeLinks)
+	require.Equal(t, map[string]int{phpPackage: 1}, db.Snapshot().VolumeLinksByPackage)
 
 	// Evicting one version drops the package count by one and removes only
 	// the corresponding bytes; the other version is untouched. In practice
