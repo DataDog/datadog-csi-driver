@@ -15,7 +15,7 @@ Supported volume types are:
   - DSDSocketDirectory: mounts the directory containing the DogStatsD socket.
   - DatadogSocketsDirectory: mounts the directory containing both sockets.
 
-Deprecated: The legacy `mode`/`path` schema is still supported but deprecated.
-Please migrate to using the `type` schema instead.
+Note: the legacy `mode`/`path` schema is still supported but is considered
+obsolete. Callers should migrate to the `type` schema instead.
 */
 package publishers

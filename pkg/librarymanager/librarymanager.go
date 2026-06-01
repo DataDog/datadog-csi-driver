@@ -182,7 +182,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	if err != nil {
 		return "", fmt.Errorf("could not create scratch directory: %w", err)
 	}
-	defer lm.fs.RemoveAll(scratch)
+	defer func() { _ = lm.fs.RemoveAll(scratch) }()
 
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())

@@ -2,7 +2,9 @@ run:
   timeout: 10m
   modules-download-mode: readonly
   tests: false
-  skip-files:
+
+issues:
+  exclude-files:
     - "testing.go"
     - ".*\\.pb\\.go"
     - ".*\\.gen\\.go"
