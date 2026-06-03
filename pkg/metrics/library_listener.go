@@ -8,13 +8,14 @@ package metrics
 import (
 	"time"
 
-	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 )
 
-// LibraryListener publishes Datadog CSI driver Prometheus metrics in response
-// to LibraryManager lifecycle events. It implements librarymanager.EventListener;
-// the librarymanager package itself does not depend on this package, which
-// keeps the manager's domain logic free from any observability backend.
+// LibraryListener publishes Datadog CSI driver Prometheus metrics in
+// response to library lifecycle events. It implements
+// libraryevents.Listener; the librarymanager package itself does not
+// depend on this package, which keeps the manager's domain logic free
+// from any observability backend.
 //
 // The listener is stateless and safe for concurrent use.
 type LibraryListener struct{}
@@ -25,11 +26,9 @@ func NewLibraryListener() *LibraryListener {
 	return &LibraryListener{}
 }
 
-// OnLibraryResolved publishes the resolution outcome counter. The underlying
-// string values of librarymanager.LibraryResolutionResult and this package's
-// ResolutionResult are kept in sync so the conversion is a no-op cast.
-func (*LibraryListener) OnLibraryResolved(result librarymanager.LibraryResolutionResult) {
-	RecordLibraryResolution(ResolutionResult(result))
+// OnLibraryResolved publishes the resolution outcome counter.
+func (*LibraryListener) OnLibraryResolved(result libraryevents.ResolutionResult) {
+	RecordLibraryResolution(result)
 }
 
 // OnLibraryDownload observes the download duration histogram.
@@ -38,6 +37,6 @@ func (*LibraryListener) OnLibraryDownload(library, registry string, duration tim
 }
 
 // OnLibraryCleanup publishes the cleanup outcome counter.
-func (*LibraryListener) OnLibraryCleanup(status librarymanager.LibraryCleanupStatus, strategy string) {
-	RecordLibraryCleanup(CleanupStatus(status), strategy)
+func (*LibraryListener) OnLibraryCleanup(status libraryevents.CleanupStatus, strategy string) {
+	RecordLibraryCleanup(status, strategy)
 }

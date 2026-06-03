@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `librarymanager` no longer depends on `pkg/metrics`. Lifecycle events are reported through a new `librarymanager.EventListener` interface; the metrics-publishing implementation lives in `pkg/metrics` and is wired in `pkg/driver`.
+- `librarymanager` no longer depends on `pkg/metrics`. Lifecycle events are reported through a new `libraryevents.Listener` interface defined in a dedicated, dependency-free `pkg/libraryevents` package; the metrics-publishing implementation lives in `pkg/metrics` and is wired in `pkg/driver`.
 
 ## [1.2.2] - 2026-04-21
 

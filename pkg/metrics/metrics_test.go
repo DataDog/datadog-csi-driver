@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	dto "github.com/prometheus/client_model/go"
@@ -18,27 +19,27 @@ import (
 func TestRecordLibraryResolution(t *testing.T) {
 	libraryResolutions.Reset()
 
-	RecordLibraryResolution(ResolutionCacheHit)
-	RecordLibraryResolution(ResolutionCacheHit)
-	RecordLibraryResolution(ResolutionDownloaded)
-	RecordLibraryResolution(ResolutionFailed)
+	RecordLibraryResolution(libraryevents.ResolutionCacheHit)
+	RecordLibraryResolution(libraryevents.ResolutionCacheHit)
+	RecordLibraryResolution(libraryevents.ResolutionDownloaded)
+	RecordLibraryResolution(libraryevents.ResolutionFailed)
 
-	require.Equal(t, float64(2), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(ResolutionCacheHit))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(ResolutionDownloaded))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(ResolutionFailed))))
+	require.Equal(t, float64(2), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionCacheHit))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionDownloaded))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionFailed))))
 }
 
 func TestRecordLibraryCleanup(t *testing.T) {
 	libraryCleanup.Reset()
 
-	RecordLibraryCleanup(CleanupSuccess, "immediate")
-	RecordLibraryCleanup(CleanupSuccess, "immediate")
-	RecordLibraryCleanup(CleanupFailed, "immediate")
-	RecordLibraryCleanup(CleanupSkippedInUse, "delayed")
+	RecordLibraryCleanup(libraryevents.CleanupSuccess, "immediate")
+	RecordLibraryCleanup(libraryevents.CleanupSuccess, "immediate")
+	RecordLibraryCleanup(libraryevents.CleanupFailed, "immediate")
+	RecordLibraryCleanup(libraryevents.CleanupSkippedInUse, "delayed")
 
-	require.Equal(t, float64(2), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(CleanupSuccess), "immediate")))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(CleanupFailed), "immediate")))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(CleanupSkippedInUse), "delayed")))
+	require.Equal(t, float64(2), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSuccess), "immediate")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupFailed), "immediate")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSkippedInUse), "delayed")))
 }
 
 func TestObserveLibraryDownloadDuration(t *testing.T) {

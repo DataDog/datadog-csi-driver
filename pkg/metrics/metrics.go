@@ -8,6 +8,7 @@ package metrics
 import (
 	"time"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 	"github.com/prometheus/client_golang/prometheus"
 )
 
@@ -27,30 +28,6 @@ const (
 	StatusFailed = "failed"
 	// StatusUnsupported represents an operation not supported by any publisher
 	StatusUnsupported = "unsupported"
-)
-
-// ResolutionResult represents the outcome of attempting to resolve a library for a volume.
-type ResolutionResult string
-
-const (
-	// ResolutionCacheHit indicates the library was already present in the local store.
-	ResolutionCacheHit ResolutionResult = "cache_hit"
-	// ResolutionDownloaded indicates the library was downloaded from the registry.
-	ResolutionDownloaded ResolutionResult = "downloaded"
-	// ResolutionFailed indicates the resolution failed at any step.
-	ResolutionFailed ResolutionResult = "failed"
-)
-
-// CleanupStatus represents the outcome of a library cleanup attempt.
-type CleanupStatus string
-
-const (
-	// CleanupSuccess indicates the library was successfully removed from disk.
-	CleanupSuccess CleanupStatus = "success"
-	// CleanupFailed indicates the cleanup attempt failed.
-	CleanupFailed CleanupStatus = "failed"
-	// CleanupSkippedInUse indicates the cleanup was skipped because the library is still in use.
-	CleanupSkippedInUse CleanupStatus = "skipped_in_use"
 )
 
 // downloadDurationBuckets covers the range from very fast cached/local downloads
@@ -126,7 +103,7 @@ func RecordVolumeUnMountAttempt(status Status) {
 }
 
 // RecordLibraryResolution records the outcome of an attempt to resolve a library for a volume.
-func RecordLibraryResolution(result ResolutionResult) {
+func RecordLibraryResolution(result libraryevents.ResolutionResult) {
 	libraryResolutions.WithLabelValues(string(result)).Inc()
 }
 
@@ -138,6 +115,6 @@ func ObserveLibraryDownloadDuration(library, registry string, d time.Duration) {
 
 // RecordLibraryCleanup records the outcome of a cleanup attempt for an unused library.
 // The strategy label captures which cleanup policy was active (e.g. "immediate", "delayed").
-func RecordLibraryCleanup(status CleanupStatus, strategy string) {
+func RecordLibraryCleanup(status libraryevents.CleanupStatus, strategy string) {
 	libraryCleanup.WithLabelValues(string(status), strategy).Inc()
 }

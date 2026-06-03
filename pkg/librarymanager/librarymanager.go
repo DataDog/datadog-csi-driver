@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 	"github.com/spf13/afero"
 )
 
@@ -52,7 +53,7 @@ type LibraryManager struct {
 	// pkg/metrics. The listener handles any observability concern (metrics,
 	// audit, etc.); the manager itself stays free of any dependency on a
 	// concrete backend.
-	listener EventListener
+	listener libraryevents.Listener
 }
 
 // LibraryManagerOption is a functional option for configuring a LibraryManager.
@@ -80,11 +81,11 @@ func WithCleanupStrategy(s CleanupStrategy) LibraryManagerOption {
 	}
 }
 
-// WithEventListener injects an EventListener. Without this option the
-// manager uses a no-op listener; the production wiring should always pass
-// an implementation that publishes metrics (or any other observability
+// WithEventListener injects a Listener. Without this option the manager
+// uses a no-op listener; the production wiring should always pass an
+// implementation that publishes metrics (or any other observability
 // signal).
-func WithEventListener(l EventListener) LibraryManagerOption {
+func WithEventListener(l libraryevents.Listener) LibraryManagerOption {
 	return func(lm *LibraryManager) {
 		if l != nil {
 			lm.listener = l
@@ -102,7 +103,7 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 		downloader:      NewDownloader(),
 		locker:          NewLocker(),
 		cleanupStrategy: NewImmediateCleanupStrategy(),
-		listener:        noopEventListener{},
+		listener:        libraryevents.NoopListener{},
 	}
 
 	// Apply options.
@@ -166,7 +167,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// Track the resolution outcome through a deferred listener call. The
 	// default "failed" reflects any early return; success paths overwrite it
 	// before returning.
-	result := LibraryResolutionFailed
+	result := libraryevents.ResolutionFailed
 	defer func() {
 		lm.listener.OnLibraryResolved(result)
 	}()
@@ -202,7 +203,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
-		result = LibraryResolutionCacheHit
+		result = libraryevents.ResolutionCacheHit
 		return path, nil
 	}
 
@@ -228,7 +229,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
-	result = LibraryResolutionDownloaded
+	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
 }
 
@@ -268,19 +269,19 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	// Check if the library is still in use
 	count, err := lm.db.GetVolumeCount(libraryID)
 	if err != nil {
-		lm.listener.OnLibraryCleanup(LibraryCleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not get linked library count: %w", err)
 	}
 	if count > 0 {
 		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
-		lm.listener.OnLibraryCleanup(LibraryCleanupSkippedInUse, strategy)
+		lm.listener.OnLibraryCleanup(libraryevents.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
 	if err := lm.store.Remove(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(LibraryCleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
 		return err
 	}
-	lm.listener.OnLibraryCleanup(LibraryCleanupSuccess, strategy)
+	lm.listener.OnLibraryCleanup(libraryevents.CleanupSuccess, strategy)
 	return nil
 }
