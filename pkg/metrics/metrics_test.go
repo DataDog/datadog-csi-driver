@@ -19,27 +19,31 @@ import (
 func TestRecordLibraryResolution(t *testing.T) {
 	libraryResolutions.Reset()
 
-	RecordLibraryResolution(libraryevents.ResolutionCacheHit)
-	RecordLibraryResolution(libraryevents.ResolutionCacheHit)
-	RecordLibraryResolution(libraryevents.ResolutionDownloaded)
-	RecordLibraryResolution(libraryevents.ResolutionFailed)
+	RecordLibraryResolution("dd-lib-java-init", libraryevents.ResolutionCacheHit)
+	RecordLibraryResolution("dd-lib-java-init", libraryevents.ResolutionCacheHit)
+	RecordLibraryResolution("dd-lib-java-init", libraryevents.ResolutionDownloaded)
+	RecordLibraryResolution("dd-lib-php-init", libraryevents.ResolutionFailed)
+	RecordLibraryResolution("", libraryevents.ResolutionFailed)
 
-	require.Equal(t, float64(2), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionCacheHit))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionDownloaded))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionFailed))))
+	require.Equal(t, float64(2), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-java-init", string(libraryevents.ResolutionCacheHit))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-java-init", string(libraryevents.ResolutionDownloaded))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-php-init", string(libraryevents.ResolutionFailed))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("", string(libraryevents.ResolutionFailed))))
 }
 
 func TestRecordLibraryCleanup(t *testing.T) {
 	libraryCleanup.Reset()
 
-	RecordLibraryCleanup(libraryevents.CleanupSuccess, "immediate")
-	RecordLibraryCleanup(libraryevents.CleanupSuccess, "immediate")
-	RecordLibraryCleanup(libraryevents.CleanupFailed, "immediate")
-	RecordLibraryCleanup(libraryevents.CleanupSkippedInUse, "delayed")
+	RecordLibraryCleanup("dd-lib-java-init", libraryevents.CleanupSuccess, "immediate")
+	RecordLibraryCleanup("dd-lib-java-init", libraryevents.CleanupSuccess, "immediate")
+	RecordLibraryCleanup("dd-lib-java-init", libraryevents.CleanupFailed, "immediate")
+	RecordLibraryCleanup("dd-lib-php-init", libraryevents.CleanupSkippedInUse, "delayed")
+	RecordLibraryCleanup("", libraryevents.CleanupFailed, "immediate")
 
-	require.Equal(t, float64(2), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSuccess), "immediate")))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupFailed), "immediate")))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSkippedInUse), "delayed")))
+	require.Equal(t, float64(2), testutil.ToFloat64(libraryCleanup.WithLabelValues("dd-lib-java-init", string(libraryevents.CleanupSuccess), "immediate")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues("dd-lib-java-init", string(libraryevents.CleanupFailed), "immediate")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues("dd-lib-php-init", string(libraryevents.CleanupSkippedInUse), "delayed")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues("", string(libraryevents.CleanupFailed), "immediate")))
 }
 
 func TestObserveLibraryDownloadDuration(t *testing.T) {

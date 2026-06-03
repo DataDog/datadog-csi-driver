@@ -316,8 +316,8 @@ func (db *Database) Snapshot() libraryevents.Snapshot {
 		cachedBytes[pkg] = n
 	}
 	return libraryevents.Snapshot{
-		CachedCountByPackage: cachedCount,
-		CachedBytesByPackage: cachedBytes,
+		CachedCountByLibrary: cachedCount,
+		CachedBytesByLibrary: cachedBytes,
 	}
 }
 

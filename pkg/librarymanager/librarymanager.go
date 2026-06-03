@@ -174,7 +174,11 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// before returning.
 	result := libraryevents.ResolutionFailed
 	defer func() {
-		lm.listener.OnLibraryResolved(result)
+		library := ""
+		if lib != nil {
+			library = lib.Name()
+		}
+		lm.listener.OnLibraryResolved(library, result)
 	}()
 
 	// Validate the input.
@@ -282,42 +286,42 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
 
+	// Look up the library name up-front so every cleanup event carries the
+	// right label. Older entries on disk that predate the metadata bucket
+	// resolve to an empty string; the cached gauges are skipped for them
+	// (we never tracked them in the first place) but the cleanup counter
+	// is still incremented.
+	library, err := lm.db.PackageForLibrary(libraryID)
+	if err != nil {
+		lm.listener.OnLibraryCleanup("", libraryevents.CleanupFailed, strategy)
+		return fmt.Errorf("could not get library for ID %s: %w", libraryID, err)
+	}
+
 	// Check if the library is still in use
 	count, err := lm.db.GetVolumeCount(libraryID)
 	if err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not get linked library count: %w", err)
 	}
 	if count > 0 {
 		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupSkippedInUse, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
 
-	// Look up the package name before the metadata is wiped so we can
-	// notify the listener with the right gauge label. Older libraries on
-	// disk that predate the metadata bucket return an empty string here;
-	// for those the cached gauges are skipped, since we never tracked them
-	// in the first place.
-	packageName, err := lm.db.PackageForLibrary(libraryID)
-	if err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
-		return fmt.Errorf("could not get package for library %s: %w", libraryID, err)
-	}
-
 	if err := lm.store.Remove(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
 		return err
 	}
 	if err := lm.db.RemoveLibrary(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not remove library metadata for %s: %w", libraryID, err)
 	}
-	if packageName != "" {
-		newCount, newBytes := lm.db.PackageCacheStats(packageName)
-		lm.listener.OnLibraryEvicted(packageName, newCount, newBytes)
+	if library != "" {
+		newCount, newBytes := lm.db.PackageCacheStats(library)
+		lm.listener.OnLibraryEvicted(library, newCount, newBytes)
 	}
-	lm.listener.OnLibraryCleanup(libraryevents.CleanupSuccess, strategy)
+	lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSuccess, strategy)
 	return nil
 }

@@ -27,18 +27,18 @@ func TestLibraryListenerPublishesResolutionAndCleanup(t *testing.T) {
 
 	l := NewLibraryListener()
 
-	l.OnLibraryResolved(libraryevents.ResolutionCacheHit)
-	l.OnLibraryResolved(libraryevents.ResolutionDownloaded)
-	l.OnLibraryResolved(libraryevents.ResolutionFailed)
-	l.OnLibraryCleanup(libraryevents.CleanupSuccess, "immediate")
-	l.OnLibraryCleanup(libraryevents.CleanupSkippedInUse, "delayed")
+	l.OnLibraryResolved("dd-lib-java-init", libraryevents.ResolutionCacheHit)
+	l.OnLibraryResolved("dd-lib-java-init", libraryevents.ResolutionDownloaded)
+	l.OnLibraryResolved("dd-lib-php-init", libraryevents.ResolutionFailed)
+	l.OnLibraryCleanup("dd-lib-java-init", libraryevents.CleanupSuccess, "immediate")
+	l.OnLibraryCleanup("dd-lib-php-init", libraryevents.CleanupSkippedInUse, "delayed")
 	l.OnLibraryDownload("dd-lib-java-init", "gcr.io", 250*time.Millisecond)
 
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionCacheHit))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionDownloaded))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues(string(libraryevents.ResolutionFailed))))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSuccess), "immediate")))
-	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues(string(libraryevents.CleanupSkippedInUse), "delayed")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-java-init", string(libraryevents.ResolutionCacheHit))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-java-init", string(libraryevents.ResolutionDownloaded))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryResolutions.WithLabelValues("dd-lib-php-init", string(libraryevents.ResolutionFailed))))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues("dd-lib-java-init", string(libraryevents.CleanupSuccess), "immediate")))
+	require.Equal(t, float64(1), testutil.ToFloat64(libraryCleanup.WithLabelValues("dd-lib-php-init", string(libraryevents.CleanupSkippedInUse), "delayed")))
 
 	// The download histogram is still populated; we just check the sample count
 	// exists for the right labels (bucket layout is tested elsewhere).
@@ -69,8 +69,8 @@ func TestLibraryListenerOnSnapshotSeedsGauges(t *testing.T) {
 
 	l := NewLibraryListener()
 	l.OnSnapshot(libraryevents.Snapshot{
-		CachedCountByPackage: map[string]int{"dd-lib-java-init": 2, "dd-lib-php-init": 1},
-		CachedBytesByPackage: map[string]int64{"dd-lib-java-init": 4096, "dd-lib-php-init": 64},
+		CachedCountByLibrary: map[string]int{"dd-lib-java-init": 2, "dd-lib-php-init": 1},
+		CachedBytesByLibrary: map[string]int64{"dd-lib-java-init": 4096, "dd-lib-php-init": 64},
 	})
 
 	require.Equal(t, float64(2), testutil.ToFloat64(librariesCached.WithLabelValues("dd-lib-java-init")))

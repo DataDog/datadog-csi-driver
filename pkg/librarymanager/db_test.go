@@ -129,10 +129,10 @@ func TestDatabaseLibraryMetadata(t *testing.T) {
 	// A different package is tracked independently.
 	require.NoError(t, db.AddLibrary("php-id", "dd-lib-php-init", 42))
 	snap := db.Snapshot()
-	require.Equal(t, 2, snap.CachedCountByPackage["dd-lib-java-init"])
-	require.Equal(t, int64(350), snap.CachedBytesByPackage["dd-lib-java-init"])
-	require.Equal(t, 1, snap.CachedCountByPackage["dd-lib-php-init"])
-	require.Equal(t, int64(42), snap.CachedBytesByPackage["dd-lib-php-init"])
+	require.Equal(t, 2, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(350), snap.CachedBytesByLibrary["dd-lib-java-init"])
+	require.Equal(t, 1, snap.CachedCountByLibrary["dd-lib-php-init"])
+	require.Equal(t, int64(42), snap.CachedBytesByLibrary["dd-lib-php-init"])
 
 	// Removing one of two versions keeps the package present.
 	require.NoError(t, db.RemoveLibrary("lib-id-1"))
