@@ -35,6 +35,20 @@ const (
 	CleanupSkippedInUse CleanupStatus = "skipped_in_use"
 )
 
+// Snapshot is a consistent view of every aggregate the listener needs to
+// publish gauges at startup. The maps are owned by the caller.
+//
+// The library key is the package name (e.g. "dd-lib-java-init"), matching
+// the "library" label used by the driver's Prometheus metrics.
+type Snapshot struct {
+	// CachedCountByLibrary maps each library to the number of cached
+	// versions (library IDs) currently on disk for that library.
+	CachedCountByLibrary map[string]int
+	// CachedBytesByLibrary maps each library to the cumulative on-disk
+	// size, in bytes, of the cached versions for that library.
+	CachedBytesByLibrary map[string]int64
+}
+
 // Listener is notified by the library manager of significant lifecycle
 // events. The default implementation is a no-op (see NoopListener) so the
 // manager can invoke it unconditionally; the production wiring registers
@@ -43,11 +57,17 @@ const (
 // All methods are expected to be quick and non-blocking: they run on the
 // caller goroutine, sometimes under a per-library lock. Implementations
 // that need to do non-trivial work should fan out internally.
+//
+// The library parameter is the package name (e.g. "dd-lib-java-init"),
+// matching the "library" label used by the driver's Prometheus metrics.
+// It may be empty when the manager could not determine the library (for
+// example on invalid inputs, or for legacy entries on disk that predate
+// the metadata bucket); listeners must tolerate that.
 type Listener interface {
 	// OnLibraryResolved is called once a library resolution attempt
 	// finishes. result reflects whether the library was served from the
 	// cache, freshly downloaded, or the resolution failed.
-	OnLibraryResolved(result ResolutionResult)
+	OnLibraryResolved(library string, result ResolutionResult)
 
 	// OnLibraryDownload is called when a library has been fetched from a
 	// registry, with the time spent on the download. Not called on cache
@@ -56,13 +76,32 @@ type Listener interface {
 
 	// OnLibraryCleanup is called for every cleanup attempt, including ones
 	// that were skipped because the library is still in use.
-	OnLibraryCleanup(status CleanupStatus, strategy string)
+	OnLibraryCleanup(library string, status CleanupStatus, strategy string)
+
+	// OnLibraryCached is called when a new library version has been stored
+	// on disk. cachedCount and cachedBytes are the per-library aggregates
+	// after the addition, suitable for a Gauge.Set.
+	OnLibraryCached(library string, cachedCount int, cachedBytes int64)
+
+	// OnLibraryEvicted is called when a library has been removed from
+	// disk. cachedCount and cachedBytes are the per-library aggregates
+	// after the removal (zero when the last version is gone), suitable
+	// for a Gauge.Set.
+	OnLibraryEvicted(library string, cachedCount int, cachedBytes int64)
+
+	// OnSnapshot is called once at LibraryManager construction so the
+	// listener can seed its gauges with the persisted state and avoid the
+	// cold-start gap until the next event.
+	OnSnapshot(snapshot Snapshot)
 }
 
 // NoopListener is the default Listener used when no observer is
 // configured. It discards every event.
 type NoopListener struct{}
 
-func (NoopListener) OnLibraryResolved(ResolutionResult)             {}
+func (NoopListener) OnLibraryResolved(string, ResolutionResult)      {}
 func (NoopListener) OnLibraryDownload(string, string, time.Duration) {}
-func (NoopListener) OnLibraryCleanup(CleanupStatus, string)         {}
+func (NoopListener) OnLibraryCleanup(string, CleanupStatus, string)  {}
+func (NoopListener) OnLibraryCached(string, int, int64)              {}
+func (NoopListener) OnLibraryEvicted(string, int, int64)             {}
+func (NoopListener) OnSnapshot(Snapshot)                             {}

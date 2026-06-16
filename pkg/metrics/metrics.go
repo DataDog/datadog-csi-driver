@@ -49,6 +49,13 @@ func newHistogramVec(name, help string, buckets []float64, labels ...string) *pr
 	}, labels)
 }
 
+func newGaugeVec(name, help string, labels ...string) *prometheus.GaugeVec {
+	return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: subsystem + separator + name,
+		Help: help,
+	}, labels)
+}
+
 var nodeVolumeMountAttempts = newCounterVec(
 	"node_publish_volume_attempts",
 	"Counts the number of publish volume requests received by the csi node server",
@@ -66,6 +73,7 @@ var nodeVolumeUnmountAttempts = newCounterVec(
 var libraryResolutions = newCounterVec(
 	"library_resolutions_total",
 	"Counts the outcome of attempts to resolve a library for a volume",
+	"library",
 	"result",
 )
 
@@ -80,8 +88,21 @@ var libraryDownloadDuration = newHistogramVec(
 var libraryCleanup = newCounterVec(
 	"library_cleanup_total",
 	"Counts cleanup attempts for unused libraries",
+	"library",
 	"status",
 	"strategy",
+)
+
+var librariesCached = newGaugeVec(
+	"libraries_cached",
+	"Number of library versions currently stored on disk, per package",
+	"library",
+)
+
+var librariesCachedBytes = newGaugeVec(
+	"libraries_cached_bytes",
+	"Cumulative on-disk size of cached libraries, in bytes, per package",
+	"library",
 )
 
 func init() {
@@ -90,6 +111,8 @@ func init() {
 	prometheus.MustRegister(libraryResolutions)
 	prometheus.MustRegister(libraryDownloadDuration)
 	prometheus.MustRegister(libraryCleanup)
+	prometheus.MustRegister(librariesCached)
+	prometheus.MustRegister(librariesCachedBytes)
 }
 
 // RecordVolumeMountAttempt records a volume mount attempt
@@ -103,8 +126,10 @@ func RecordVolumeUnMountAttempt(status Status) {
 }
 
 // RecordLibraryResolution records the outcome of an attempt to resolve a library for a volume.
-func RecordLibraryResolution(result libraryevents.ResolutionResult) {
-	libraryResolutions.WithLabelValues(string(result)).Inc()
+// The library label is the package name (e.g. "dd-lib-java-init"); it may be empty
+// when the resolution failed before the library was identified.
+func RecordLibraryResolution(library string, result libraryevents.ResolutionResult) {
+	libraryResolutions.WithLabelValues(library, string(result)).Inc()
 }
 
 // ObserveLibraryDownloadDuration records the duration of a successful library download.
@@ -114,7 +139,20 @@ func ObserveLibraryDownloadDuration(library, registry string, d time.Duration) {
 }
 
 // RecordLibraryCleanup records the outcome of a cleanup attempt for an unused library.
-// The strategy label captures which cleanup policy was active (e.g. "immediate", "delayed").
-func RecordLibraryCleanup(status libraryevents.CleanupStatus, strategy string) {
-	libraryCleanup.WithLabelValues(string(status), strategy).Inc()
+// The library label is the package name (e.g. "dd-lib-java-init"); it may be empty
+// for legacy entries on disk that predate the metadata bucket. The strategy label
+// captures which cleanup policy was active (e.g. "immediate", "delayed").
+func RecordLibraryCleanup(library string, status libraryevents.CleanupStatus, strategy string) {
+	libraryCleanup.WithLabelValues(library, string(status), strategy).Inc()
+}
+
+// SetLibrariesCachedForLibrary sets the number of cached versions for a library.
+func SetLibrariesCachedForLibrary(library string, count int) {
+	librariesCached.WithLabelValues(library).Set(float64(count))
+}
+
+// SetLibrariesCachedBytesForLibrary sets the cumulative on-disk size of cached versions
+// for a given library, in bytes.
+func SetLibrariesCachedBytesForLibrary(library string, bytes int64) {
+	librariesCachedBytes.WithLabelValues(library).Set(float64(bytes))
 }

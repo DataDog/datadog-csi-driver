@@ -143,6 +143,11 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 	// Setup cache.
 	lm.cache = NewImageCache(lm.downloader, DefaultImageCacheTTL)
 
+	// Seed listener gauges from the persisted state, so dashboards reflect
+	// reality immediately after a driver restart instead of waiting for the
+	// first event.
+	lm.listener.OnSnapshot(lm.db.Snapshot())
+
 	return lm, nil
 }
 
@@ -169,7 +174,11 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// before returning.
 	result := libraryevents.ResolutionFailed
 	defer func() {
-		lm.listener.OnLibraryResolved(result)
+		library := ""
+		if lib != nil {
+			library = lib.Name()
+		}
+		lm.listener.OnLibraryResolved(library, result)
 	}()
 
 	// Validate the input.
@@ -217,7 +226,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())
 	downloadStart := time.Now()
-	err = lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
+	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}
@@ -229,6 +238,17 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", err
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
+
+	// Record the library in the metadata bucket and notify the listener.
+	// AddLibrary is the canonical writer for the per-library metadata; it
+	// must be called before any consumer relies on the package name being
+	// available for the given library ID.
+	if err := lm.db.AddLibrary(libraryID, lib.Name(), sizeBytes); err != nil {
+		return "", fmt.Errorf("could not record library metadata: %w", err)
+	}
+	count, totalBytes := lm.db.PackageCacheStats(lib.Name())
+	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
+
 	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
 }
@@ -266,22 +286,42 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
 
+	// Look up the library name up-front so every cleanup event carries the
+	// right label. Older entries on disk that predate the metadata bucket
+	// resolve to an empty string; the cached gauges are skipped for them
+	// (we never tracked them in the first place) but the cleanup counter
+	// is still incremented.
+	library, err := lm.db.PackageForLibrary(libraryID)
+	if err != nil {
+		lm.listener.OnLibraryCleanup("", libraryevents.CleanupFailed, strategy)
+		return fmt.Errorf("could not get library for ID %s: %w", libraryID, err)
+	}
+
 	// Check if the library is still in use
 	count, err := lm.db.GetVolumeCount(libraryID)
 	if err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not get linked library count: %w", err)
 	}
 	if count > 0 {
 		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupSkippedInUse, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
+
 	if err := lm.store.Remove(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
 		return err
 	}
-	lm.listener.OnLibraryCleanup(libraryevents.CleanupSuccess, strategy)
+	if err := lm.db.RemoveLibrary(libraryID); err != nil {
+		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
+		return fmt.Errorf("could not remove library metadata for %s: %w", libraryID, err)
+	}
+	if library != "" {
+		newCount, newBytes := lm.db.PackageCacheStats(library)
+		lm.listener.OnLibraryEvicted(library, newCount, newBytes)
+	}
+	lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSuccess, strategy)
 	return nil
 }
