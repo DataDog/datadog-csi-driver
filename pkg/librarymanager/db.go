@@ -78,6 +78,10 @@ type Database struct {
 	// cachedBytesByPackage sums the on-disk size of cached libraries per
 	// package name.
 	cachedBytesByPackage map[string]int64
+	// volumeLinksByPackage counts the number of volumes currently linked
+	// to any library of a given package. Updated atomically with the
+	// LinkVolume/UnlinkVolume bbolt transactions.
+	volumeLinksByPackage map[string]int
 }
 
 // NewDatabase initializes a new database. If a database file exists, it will re-use the existing file. Call close when
@@ -112,6 +116,7 @@ func NewDatabase(basePath string) (*Database, error) {
 		bbolt:                    db,
 		cachedLibrariesByPackage: map[string]int{},
 		cachedBytesByPackage:     map[string]int64{},
+		volumeLinksByPackage:     map[string]int{},
 	}
 
 	// Seed the in-memory aggregates from the on-disk metadata so the
@@ -124,22 +129,51 @@ func NewDatabase(basePath string) (*Database, error) {
 	return database, nil
 }
 
-// loadCaches scans LibraryMetadataBucket once at startup and rebuilds the
-// in-memory aggregates.
+// loadCaches scans LibraryMetadataBucket and LibraryMappingBucket once at
+// startup and rebuilds the in-memory aggregates. The two buckets are walked
+// in the same read transaction to guarantee a consistent snapshot.
 func (db *Database) loadCaches() error {
 	return db.bbolt.View(func(tx *bbolt.Tx) error {
-		bkt := tx.Bucket([]byte(LibraryMetadataBucket))
-		if bkt == nil {
+		metaBkt := tx.Bucket([]byte(LibraryMetadataBucket))
+		mappingBkt := tx.Bucket([]byte(LibraryMappingBucket))
+
+		// libraryToPackage lets us project the per-library volume count
+		// from LibraryMappingBucket onto a per-package count via
+		// LibraryMetadataBucket.
+		libraryToPackage := map[string]string{}
+		if metaBkt != nil {
+			if err := metaBkt.ForEach(func(k, v []byte) error {
+				var meta libraryMetadata
+				if err := json.Unmarshal(v, &meta); err != nil {
+					return fmt.Errorf("could not unmarshal library metadata: %w", err)
+				}
+				db.cachedLibrariesByPackage[meta.Package]++
+				db.cachedBytesByPackage[meta.Package] += meta.SizeBytes
+				libraryToPackage[string(k)] = meta.Package
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+
+		if mappingBkt == nil {
 			return nil
 		}
-		return bkt.ForEach(func(_, v []byte) error {
-			var meta libraryMetadata
-			if err := json.Unmarshal(v, &meta); err != nil {
-				return fmt.Errorf("could not unmarshal library metadata: %w", err)
+		return mappingBkt.ForEachBucket(func(libraryKey []byte) error {
+			pkg, ok := libraryToPackage[string(libraryKey)]
+			if !ok {
+				// Library is on disk but predates the metadata bucket;
+				// we skip it (no package label available).
+				return nil
 			}
-			db.cachedLibrariesByPackage[meta.Package]++
-			db.cachedBytesByPackage[meta.Package] += meta.SizeBytes
-			return nil
+			libraryBkt := mappingBkt.Bucket(libraryKey)
+			if libraryBkt == nil {
+				return nil
+			}
+			return libraryBkt.ForEach(func(_, _ []byte) error {
+				db.volumeLinksByPackage[pkg]++
+				return nil
+			})
 		})
 	})
 }
@@ -272,6 +306,14 @@ func (db *Database) PackageCacheStats(packageName string) (int, int64) {
 	return db.cachedLibrariesByPackage[packageName], db.cachedBytesByPackage[packageName]
 }
 
+// VolumeLinkCount returns the number of volumes currently linked to any
+// library of the given package.
+func (db *Database) VolumeLinkCount(packageName string) int {
+	db.cacheMu.Lock()
+	defer db.cacheMu.Unlock()
+	return db.volumeLinksByPackage[packageName]
+}
+
 // PackageForLibrary returns the package name recorded for a library, or an
 // empty string when the library has no metadata (for instance because it
 // was added by an older driver version that did not yet persist
@@ -315,13 +357,21 @@ func (db *Database) Snapshot() libraryevents.Snapshot {
 	for pkg, n := range db.cachedBytesByPackage {
 		cachedBytes[pkg] = n
 	}
+	volumeLinks := make(map[string]int, len(db.volumeLinksByPackage))
+	for pkg, n := range db.volumeLinksByPackage {
+		volumeLinks[pkg] = n
+	}
 	return libraryevents.Snapshot{
 		CachedCountByLibrary: cachedCount,
 		CachedBytesByLibrary: cachedBytes,
+		VolumeLinksByLibrary: volumeLinks,
 	}
 }
 
 // LinkVolume creates a bidrectional mapping between the library and volume.
+// When per-library metadata is recorded (i.e. AddLibrary has been called
+// before LinkVolume), the per-package volume-links aggregate is updated
+// atomically with the bbolt transaction.
 func (db *Database) LinkVolume(libraryID string, volumeID string) error {
 	// Validate input.
 	if libraryID == "" {
@@ -356,6 +406,12 @@ func (db *Database) LinkVolume(libraryID string, volumeID string) error {
 		return fmt.Errorf("could not create bucket for library %s: %w", libraryID, err)
 	}
 
+	// If the volume is already linked there is nothing to do; skip the
+	// extra writes and the aggregate update.
+	if libraryBkt.Get([]byte(volumeID)) != nil {
+		return nil
+	}
+
 	// Create the bucket for the volume if it does not exist.
 	volumeBkt, err := volumeMappingBkt.CreateBucketIfNotExists([]byte(volumeID))
 	if err != nil {
@@ -388,23 +444,63 @@ func (db *Database) LinkVolume(libraryID string, volumeID string) error {
 		return fmt.Errorf("could not assign volume with id %s: %w", volumeID, err)
 	}
 
-	// Commit the transaction.
-	err = tx.Commit()
+	// Look up the package name now, while the transaction is still open
+	// and we have a consistent view. The lookup falls back to an empty
+	// string for libraries that predate the metadata bucket.
+	packageName, err := packageForLibraryInTx(tx, libraryID)
 	if err != nil {
+		return err
+	}
+
+	// Take cacheMu just long enough to update the aggregate and commit so
+	// readers never observe a state where bbolt and the in-memory cache
+	// disagree.
+	db.cacheMu.Lock()
+	if packageName != "" {
+		db.volumeLinksByPackage[packageName]++
+	}
+	if err := tx.Commit(); err != nil {
+		if packageName != "" {
+			db.volumeLinksByPackage[packageName]--
+		}
+		db.cacheMu.Unlock()
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
+	db.cacheMu.Unlock()
 
 	return nil
 }
 
+// packageForLibraryInTx is the transaction-bound flavour of PackageForLibrary
+// used internally by LinkVolume/UnlinkVolume to keep the aggregate update
+// consistent with the bbolt write.
+func packageForLibraryInTx(tx *bbolt.Tx, libraryID string) (string, error) {
+	bkt := tx.Bucket([]byte(LibraryMetadataBucket))
+	if bkt == nil {
+		return "", nil
+	}
+	raw := bkt.Get([]byte(libraryID))
+	if raw == nil {
+		return "", nil
+	}
+	var meta libraryMetadata
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return "", fmt.Errorf("could not unmarshal library metadata: %w", err)
+	}
+	return meta.Package, nil
+}
+
 // UnlinkVolume removes the link for a given volume.
+// When the link existed and per-library metadata is recorded, the
+// per-package volume-links aggregate is decremented atomically with the
+// bbolt transaction.
 func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 	// Validate input.
 	if libraryID == "" {
 		return fmt.Errorf("library ID cannot be blank")
 	}
 	if volumeID == "" {
-		return fmt.Errorf(" volume ID cannot be blank")
+		return fmt.Errorf("volume ID cannot be blank")
 	}
 
 	// Start a transaction.
@@ -424,6 +520,13 @@ func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 	volumeMappingBkt := tx.Bucket([]byte(VolumeMappingBucket))
 	if volumeMappingBkt == nil {
 		return fmt.Errorf("library mapping bucket does not exist")
+	}
+
+	// Detect whether the link actually existed so the aggregate is only
+	// decremented for a real removal.
+	wasLinked := false
+	if libraryBucket := libraryMappingBkt.Bucket([]byte(libraryID)); libraryBucket != nil {
+		wasLinked = libraryBucket.Get([]byte(volumeID)) != nil
 	}
 
 	// Check if the library bucket exists.
@@ -466,11 +569,31 @@ func (db *Database) UnlinkVolume(libraryID string, volumeID string) error {
 		}
 	}
 
-	// Commit the transaction.
-	err = tx.Commit()
-	if err != nil {
+	// Look up the package while the transaction is still open so the
+	// aggregate update is consistent with the bbolt write.
+	packageName := ""
+	if wasLinked {
+		packageName, err = packageForLibraryInTx(tx, libraryID)
+		if err != nil {
+			return err
+		}
+	}
+
+	db.cacheMu.Lock()
+	if packageName != "" {
+		db.volumeLinksByPackage[packageName]--
+		if db.volumeLinksByPackage[packageName] <= 0 {
+			delete(db.volumeLinksByPackage, packageName)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		if packageName != "" {
+			db.volumeLinksByPackage[packageName]++
+		}
+		db.cacheMu.Unlock()
 		return fmt.Errorf("could not commit transaction: %w", err)
 	}
+	db.cacheMu.Unlock()
 
 	return nil
 }

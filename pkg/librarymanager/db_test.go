@@ -183,3 +183,58 @@ func TestDatabaseValidatesBlankInputsForMetadata(t *testing.T) {
 	_, err = db.PackageForLibrary("")
 	require.Error(t, err)
 }
+
+func TestDatabaseVolumeLinksAggregateByPackage(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// Aggregate is zero before any link is created.
+	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+
+	// Without metadata the aggregate is not touched even after a link.
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-1"))
+	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+
+	// Once metadata is recorded, subsequent links update the aggregate.
+	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 100))
+	require.NoError(t, db.AddLibrary("lib-id-2", "dd-lib-java-init", 200))
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-2"))
+	require.NoError(t, db.LinkVolume("lib-id-2", "vol-3"))
+	require.Equal(t, 2, db.VolumeLinkCount("dd-lib-java-init"))
+
+	// Re-linking the same volume is a no-op for the aggregate.
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-2"))
+	require.Equal(t, 2, db.VolumeLinkCount("dd-lib-java-init"))
+
+	// Unlinks decrement and eventually drop the package entry.
+	require.NoError(t, db.UnlinkVolume("lib-id-1", "vol-2"))
+	require.NoError(t, db.UnlinkVolume("lib-id-2", "vol-3"))
+	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+
+	// Unlinking an unknown volume is a no-op for the aggregate.
+	require.NoError(t, db.UnlinkVolume("lib-id-1", "never-existed"))
+	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+}
+
+func TestDatabaseVolumeLinksReloadedFromDisk(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 100))
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-1"))
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-2"))
+	require.NoError(t, db.Close())
+
+	db2, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db2.Close()
+
+	snap := db2.Snapshot()
+	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
+}

@@ -47,6 +47,9 @@ type Snapshot struct {
 	// CachedBytesByLibrary maps each library to the cumulative on-disk
 	// size, in bytes, of the cached versions for that library.
 	CachedBytesByLibrary map[string]int64
+	// VolumeLinksByLibrary maps each library to the number of volumes
+	// currently linked to any of its cached versions.
+	VolumeLinksByLibrary map[string]int
 }
 
 // Listener is notified by the library manager of significant lifecycle
@@ -89,6 +92,16 @@ type Listener interface {
 	// for a Gauge.Set.
 	OnLibraryEvicted(library string, cachedCount int, cachedBytes int64)
 
+	// OnVolumeLinked is called once a volume has been linked to a cached
+	// library version. volumeLinks is the per-library aggregate after
+	// the link, suitable for a Gauge.Set.
+	OnVolumeLinked(library string, volumeLinks int)
+
+	// OnVolumeUnlinked is called once a volume has been unlinked from a
+	// cached library version. volumeLinks is the per-library aggregate
+	// after the unlink (zero when the last volume is gone).
+	OnVolumeUnlinked(library string, volumeLinks int)
+
 	// OnSnapshot is called once at LibraryManager construction so the
 	// listener can seed its gauges with the persisted state and avoid the
 	// cold-start gap until the next event.
@@ -104,4 +117,6 @@ func (NoopListener) OnLibraryDownload(string, string, time.Duration) {}
 func (NoopListener) OnLibraryCleanup(string, CleanupStatus, string)  {}
 func (NoopListener) OnLibraryCached(string, int, int64)              {}
 func (NoopListener) OnLibraryEvicted(string, int, int64)             {}
+func (NoopListener) OnVolumeLinked(string, int)                      {}
+func (NoopListener) OnVolumeUnlinked(string, int)                    {}
 func (NoopListener) OnSnapshot(Snapshot)                             {}
