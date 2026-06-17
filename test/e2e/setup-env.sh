@@ -32,7 +32,7 @@ echo "🚀 [5/5] Installing Helm chart with custom image..."
 # Clone the helm-charts repo to get the latest chart with dsdStreamHostSocketPath support.
 # TODO: switch back to 'datadog/datadog-csi-driver' from helm.datadoghq.com once the chart is published.
 HELM_CHARTS_DIR=$(mktemp -d)
-git clone --branch main --depth 1 https://github.com/DataDog/helm-charts.git "$HELM_CHARTS_DIR"
+git clone --branch carlosroman/AGTMETRICS-340-dsd-stream-socket --depth 1 https://github.com/DataDog/helm-charts.git "$HELM_CHARTS_DIR"
 
 kubectl create namespace "$NAMESPACE" || true
 
