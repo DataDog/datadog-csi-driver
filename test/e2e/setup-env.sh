@@ -43,6 +43,7 @@ helm upgrade --install "$HELM_RELEASE" datadog/datadog-csi-driver \
   --set image.tag="dev" \
   --set image.pullPolicy=IfNotPresent \
   --set sockets.apmHostSocketPath="/socket-dir/apm.sock" \
-  --set sockets.dsdHostSocketPath="/socket-dir/dsd.sock"
+  --set sockets.dsdHostSocketPath="/socket-dir/dsd.sock" \
+  --set sockets.dsdStreamHostSocketPath="/socket-dir/dsd-stream.sock"
 
 echo "✅ CSI driver deployed using local image."
