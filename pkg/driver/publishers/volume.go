@@ -17,6 +17,8 @@ const (
 	DSDSocket VolumeType = "DSDSocket"
 	// DSDSocketDirectory mounts the parent directory of the DogStatsD socket
 	DSDSocketDirectory VolumeType = "DSDSocketDirectory"
+	// DSDStreamSocket mounts the DogStatsD stream socket file
+	DSDStreamSocket VolumeType = "DSDStreamSocket"
 	// DatadogSocketsDirectory is deprecated, use DSDSocketDirectory instead
 	DatadogSocketsDirectory VolumeType = "DatadogSocketsDirectory"
 	// DatadogLibrary mounts a Datadog instrumentation library from an OCI image

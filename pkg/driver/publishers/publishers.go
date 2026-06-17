@@ -44,7 +44,7 @@ type Publisher interface {
 func GetPublishers(
 	fs afero.Afero,
 	mounter mount.Interface,
-	apmSocketPath, dsdSocketPath, storageBasePath string,
+	apmSocketPath, dsdSocketPath, dsdStreamSocketPath, storageBasePath string,
 	libraryManager *librarymanager.LibraryManager,
 	apmEnabled bool,
 	allowedRegistries []string,
@@ -66,7 +66,7 @@ func GetPublishers(
 		publishers,
 
 		// New "type" schema publishers
-		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
+		newSocketPublisher(fs, mounter, apmSocketPath, dsdSocketPath, dsdStreamSocketPath),
 		newLocalPublisher(fs, mounter, apmSocketPath, dsdSocketPath),
 
 		// Legacy "mode/path" schema publishers (deprecated)
