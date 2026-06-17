@@ -28,14 +28,17 @@ kind load docker-image "$IMAGE_NAME" --name "$CLUSTER_NAME"
 
 # Install the Helm chart with the local image
 echo "🚀 [5/5] Installing Helm chart with custom image..."
-helm repo add datadog https://helm.datadoghq.com || true
-helm repo update
+
+# Clone the helm-charts repo to get the latest chart with dsdStreamHostSocketPath support.
+# TODO: switch back to 'datadog/datadog-csi-driver' from helm.datadoghq.com once the chart is published.
+HELM_CHARTS_DIR=$(mktemp -d)
+git clone --branch main --depth 1 https://github.com/DataDog/helm-charts.git "$HELM_CHARTS_DIR"
 
 kubectl create namespace "$NAMESPACE" || true
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-helm upgrade --install "$HELM_RELEASE" datadog/datadog-csi-driver \
+helm upgrade --install "$HELM_RELEASE" "$HELM_CHARTS_DIR/charts/datadog-csi-driver" \
   --namespace "$NAMESPACE" \
   --wait \
   --values "$SCRIPT_DIR/helm-values.yaml" \
