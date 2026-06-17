@@ -6,12 +6,24 @@
 package librarymanager_test
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/stretchr/testify/require"
+	"go.etcd.io/bbolt"
 )
+
+// volumeCount is a small helper to read the live volume count of a library
+// through the public GetLibrary accessor.
+func volumeCount(t *testing.T, db *librarymanager.Database, libraryID string) int {
+	t.Helper()
+	info, _, err := db.GetLibrary(libraryID)
+	require.NoError(t, err)
+	return info.VolumeCount
+}
 
 func TestDatabase(t *testing.T) {
 	// Create scratch space.
@@ -31,13 +43,13 @@ func TestDatabase(t *testing.T) {
 
 	// Ensure there are no libraries linked when none have been linked.
 	libraryID := "test-library-id"
-	count, err := db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 0, count, "there should be no volumes linked")
+	require.Equal(t, 0, volumeCount(t, db, libraryID), "there should be no volumes linked")
 
 	// Ensure that an unlink does not produce an error if it has not been linked.
-	err = db.UnlinkVolume(libraryID, volumeID)
+	unlinked, pkg, err := db.UnlinkVolume(volumeID)
 	require.NoError(t, err)
+	require.Empty(t, unlinked, "unlinking an unknown volume reports no library")
+	require.Empty(t, pkg, "unlinking an unknown volume reports no package")
 
 	// Ensure a linked volume is linked.
 	err = db.LinkVolume(libraryID, volumeID)
@@ -45,19 +57,15 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	count, err = db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 1, count, "there should be one volume linked")
+	require.Equal(t, 1, volumeCount(t, db, libraryID), "there should be one volume linked")
 
-	// Ensure a second call to link the same volume does nothing
+	// Ensure a second call to link the same volume does nothing.
 	err = db.LinkVolume(libraryID, volumeID)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	count, err = db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 1, count, "there should still be one volume linked")
+	require.Equal(t, 1, volumeCount(t, db, libraryID), "there should still be one volume linked")
 
 	// Ensure a second linked volume shows both.
 	secondVolumeID := "test-volume-id-two"
@@ -66,26 +74,22 @@ func TestDatabase(t *testing.T) {
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	count, err = db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 2, count, "there should be two volumes linked")
+	require.Equal(t, 2, volumeCount(t, db, libraryID), "there should be two volumes linked")
 
 	// Ensure an unlinked volume only has one volume linked.
-	err = db.UnlinkVolume(libraryID, secondVolumeID)
+	unlinked, _, err = db.UnlinkVolume(secondVolumeID)
 	require.NoError(t, err)
+	require.Equal(t, libraryID, unlinked, "unlink reports the library the volume used")
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Equal(t, libraryID, lib, "there should be a library linked")
-	count, err = db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 1, count, "there should be one volume linked")
+	require.Equal(t, 1, volumeCount(t, db, libraryID), "there should be one volume linked")
 
 	// Ensure all unlinks completely zeros out the count.
-	err = db.UnlinkVolume(libraryID, volumeID)
+	unlinked, _, err = db.UnlinkVolume(volumeID)
 	require.NoError(t, err)
-	count, err = db.GetVolumeCount(libraryID)
-	require.NoError(t, err)
-	require.Equal(t, 0, count, "there should be no volumes linked")
+	require.Equal(t, libraryID, unlinked)
+	require.Equal(t, 0, volumeCount(t, db, libraryID), "there should be no volumes linked")
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
 	require.Empty(t, lib, "there should be no libs linked")
@@ -99,36 +103,39 @@ func TestDatabaseLibraryMetadata(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	// A package with no cached library reports zero stats and an empty package name.
-	count, bytes := db.PackageCacheStats("unknown")
-	require.Equal(t, 0, count)
-	require.Equal(t, int64(0), bytes)
-
-	pkg, err := db.PackageForLibrary("unknown")
+	// An unknown library reports no record.
+	info, found, err := db.GetLibrary("unknown")
 	require.NoError(t, err)
-	require.Empty(t, pkg)
+	require.False(t, found)
+	require.Empty(t, info.Package)
+	require.Equal(t, int64(0), info.SizeBytes)
 
-	// Two versions of the same package aggregate together.
+	// Two versions of the same package aggregate together in the snapshot.
 	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 100))
 	require.NoError(t, db.AddLibrary("lib-id-2", "dd-lib-java-init", 200))
-	count, bytes = db.PackageCacheStats("dd-lib-java-init")
-	require.Equal(t, 2, count)
-	require.Equal(t, int64(300), bytes)
-
-	pkg, err = db.PackageForLibrary("lib-id-1")
+	snap, err := db.Snapshot()
 	require.NoError(t, err)
-	require.Equal(t, "dd-lib-java-init", pkg)
+	require.Equal(t, 2, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(300), snap.CachedBytesByLibrary["dd-lib-java-init"])
+
+	info, found, err = db.GetLibrary("lib-id-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "dd-lib-java-init", info.Package)
+	require.Equal(t, int64(100), info.SizeBytes)
 
 	// AddLibrary on the same library ID is idempotent: it overwrites the
 	// previous record without double-counting.
 	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 150))
-	count, bytes = db.PackageCacheStats("dd-lib-java-init")
-	require.Equal(t, 2, count)
-	require.Equal(t, int64(350), bytes)
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 2, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(350), snap.CachedBytesByLibrary["dd-lib-java-init"])
 
 	// A different package is tracked independently.
 	require.NoError(t, db.AddLibrary("php-id", "dd-lib-php-init", 42))
-	snap := db.Snapshot()
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
 	require.Equal(t, 2, snap.CachedCountByLibrary["dd-lib-java-init"])
 	require.Equal(t, int64(350), snap.CachedBytesByLibrary["dd-lib-java-init"])
 	require.Equal(t, 1, snap.CachedCountByLibrary["dd-lib-php-init"])
@@ -136,15 +143,17 @@ func TestDatabaseLibraryMetadata(t *testing.T) {
 
 	// Removing one of two versions keeps the package present.
 	require.NoError(t, db.RemoveLibrary("lib-id-1"))
-	count, bytes = db.PackageCacheStats("dd-lib-java-init")
-	require.Equal(t, 1, count)
-	require.Equal(t, int64(200), bytes)
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 1, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(200), snap.CachedBytesByLibrary["dd-lib-java-init"])
 
 	// Removing the last version drops the package entry from the aggregates.
 	require.NoError(t, db.RemoveLibrary("lib-id-2"))
-	count, bytes = db.PackageCacheStats("dd-lib-java-init")
-	require.Equal(t, 0, count)
-	require.Equal(t, int64(0), bytes)
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 0, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(0), snap.CachedBytesByLibrary["dd-lib-java-init"])
 
 	// RemoveLibrary is a no-op on an unknown library.
 	require.NoError(t, db.RemoveLibrary("never-existed"))
@@ -164,9 +173,10 @@ func TestDatabaseMetadataPersistsAcrossRestart(t *testing.T) {
 	require.NoError(t, err)
 	defer db2.Close()
 
-	count, bytes := db2.PackageCacheStats("dd-lib-java-init")
-	require.Equal(t, 1, count)
-	require.Equal(t, int64(1024), bytes)
+	snap, err := db2.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 1, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(1024), snap.CachedBytesByLibrary["dd-lib-java-init"])
 }
 
 func TestDatabaseValidatesBlankInputsForMetadata(t *testing.T) {
@@ -180,7 +190,11 @@ func TestDatabaseValidatesBlankInputsForMetadata(t *testing.T) {
 	require.Error(t, db.AddLibrary("", "pkg", 0))
 	require.Error(t, db.AddLibrary("lib", "", 0))
 	require.Error(t, db.RemoveLibrary(""))
-	_, err = db.PackageForLibrary("")
+	_, _, err = db.GetLibrary("")
+	require.Error(t, err)
+	_, _, err = db.UnlinkVolume("")
+	require.Error(t, err)
+	_, err = db.GetLibraryForVolume("")
 	require.Error(t, err)
 }
 
@@ -193,31 +207,48 @@ func TestDatabaseVolumeLinksAggregateByPackage(t *testing.T) {
 	defer db.Close()
 
 	// Aggregate is zero before any link is created.
-	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+	snap, err := db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 0, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 
-	// Without metadata the aggregate is not touched even after a link.
+	// Without metadata the aggregate is not touched even after a link
+	// (a library without a package label is excluded from the snapshot).
 	require.NoError(t, db.LinkVolume("lib-id-1", "vol-1"))
-	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 0, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 
-	// Once metadata is recorded, subsequent links update the aggregate.
+	// Once metadata is recorded, the aggregate reflects the links.
 	require.NoError(t, db.AddLibrary("lib-id-1", "dd-lib-java-init", 100))
 	require.NoError(t, db.AddLibrary("lib-id-2", "dd-lib-java-init", 200))
-	require.NoError(t, db.LinkVolume("lib-id-1", "vol-2"))
 	require.NoError(t, db.LinkVolume("lib-id-2", "vol-3"))
-	require.Equal(t, 2, db.VolumeLinkCount("dd-lib-java-init"))
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 
 	// Re-linking the same volume is a no-op for the aggregate.
-	require.NoError(t, db.LinkVolume("lib-id-1", "vol-2"))
-	require.Equal(t, 2, db.VolumeLinkCount("dd-lib-java-init"))
+	require.NoError(t, db.LinkVolume("lib-id-1", "vol-1"))
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 
-	// Unlinks decrement and eventually drop the package entry.
-	require.NoError(t, db.UnlinkVolume("lib-id-1", "vol-2"))
-	require.NoError(t, db.UnlinkVolume("lib-id-2", "vol-3"))
-	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+	// Unlinks decrement and eventually drop the package entry. The unlink
+	// also reports the package the volume used.
+	_, unlinkedPkg, err := db.UnlinkVolume("vol-1")
+	require.NoError(t, err)
+	require.Equal(t, "dd-lib-java-init", unlinkedPkg)
+	_, _, err = db.UnlinkVolume("vol-3")
+	require.NoError(t, err)
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 0, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 
 	// Unlinking an unknown volume is a no-op for the aggregate.
-	require.NoError(t, db.UnlinkVolume("lib-id-1", "never-existed"))
-	require.Equal(t, 0, db.VolumeLinkCount("dd-lib-java-init"))
+	_, _, err = db.UnlinkVolume("never-existed")
+	require.NoError(t, err)
+	snap, err = db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 0, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 }
 
 func TestDatabaseVolumeLinksReloadedFromDisk(t *testing.T) {
@@ -235,6 +266,110 @@ func TestDatabaseVolumeLinksReloadedFromDisk(t *testing.T) {
 	require.NoError(t, err)
 	defer db2.Close()
 
-	snap := db2.Snapshot()
+	snap, err := db2.Snapshot()
+	require.NoError(t, err)
 	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
+}
+
+// TestDatabaseMigratesLegacySchema seeds a database with the legacy
+// nested-bucket schema (library-mappings/volume-mappings/library-metadata)
+// and verifies NewDatabase rewrites it into the flat volumes/libraries schema
+// without losing link or metadata information.
+func TestDatabaseMigratesLegacySchema(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	dbPath := filepath.Join(tsd.Path(t), librarymanager.DatabaseFileName)
+
+	// Build a legacy-shaped database by hand.
+	legacy, err := bbolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Update(func(tx *bbolt.Tx) error {
+		meta, err := tx.CreateBucketIfNotExists([]byte("library-metadata"))
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(map[string]any{"package": "dd-lib-java-init", "size_bytes": 512})
+		if err != nil {
+			return err
+		}
+		if err := meta.Put([]byte("lib-id-1"), encoded); err != nil {
+			return err
+		}
+
+		mappings, err := tx.CreateBucketIfNotExists([]byte("library-mappings"))
+		if err != nil {
+			return err
+		}
+		libBkt, err := mappings.CreateBucketIfNotExists([]byte("lib-id-1"))
+		if err != nil {
+			return err
+		}
+		if err := libBkt.Put([]byte("vol-1"), []byte("{}")); err != nil {
+			return err
+		}
+		if err := libBkt.Put([]byte("vol-2"), []byte("{}")); err != nil {
+			return err
+		}
+
+		// A legacy library without metadata: it must still migrate its links.
+		orphanBkt, err := mappings.CreateBucketIfNotExists([]byte("lib-id-orphan"))
+		if err != nil {
+			return err
+		}
+		if err := orphanBkt.Put([]byte("vol-3"), []byte("{}")); err != nil {
+			return err
+		}
+
+		_, err = tx.CreateBucketIfNotExists([]byte("volume-mappings"))
+		return err
+	}))
+	require.NoError(t, legacy.Close())
+
+	// Reopen through NewDatabase, which runs the migration.
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+
+	// Library metadata and the migrated volume count are preserved.
+	info, found, err := db.GetLibrary("lib-id-1")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "dd-lib-java-init", info.Package)
+	require.Equal(t, int64(512), info.SizeBytes)
+	require.Equal(t, 2, info.VolumeCount)
+
+	// Volume -> library links survive the migration.
+	for _, vol := range []string{"vol-1", "vol-2"} {
+		lib, err := db.GetLibraryForVolume(vol)
+		require.NoError(t, err)
+		require.Equal(t, "lib-id-1", lib)
+	}
+
+	// The orphan library (no metadata) keeps its links and a count.
+	orphan, found, err := db.GetLibrary("lib-id-orphan")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Empty(t, orphan.Package)
+	require.Equal(t, 1, orphan.VolumeCount)
+
+	// The snapshot reflects only labelled libraries.
+	snap, err := db.Snapshot()
+	require.NoError(t, err)
+	require.Equal(t, 1, snap.CachedCountByLibrary["dd-lib-java-init"])
+	require.Equal(t, int64(512), snap.CachedBytesByLibrary["dd-lib-java-init"])
+	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
+
+	// The legacy buckets are gone after migration.
+	require.NoError(t, db.Close())
+	check, err := bbolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+	defer check.Close()
+	require.NoError(t, check.View(func(tx *bbolt.Tx) error {
+		require.Nil(t, tx.Bucket([]byte("library-mappings")))
+		require.Nil(t, tx.Bucket([]byte("volume-mappings")))
+		require.Nil(t, tx.Bucket([]byte("library-metadata")))
+		require.NotNil(t, tx.Bucket([]byte("volumes")))
+		require.NotNil(t, tx.Bucket([]byte("libraries")))
+		return nil
+	}))
 }

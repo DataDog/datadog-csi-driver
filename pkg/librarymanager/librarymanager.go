@@ -146,9 +146,24 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 	// Seed listener gauges from the persisted state, so dashboards reflect
 	// reality immediately after a driver restart instead of waiting for the
 	// first event.
-	lm.listener.OnSnapshot(lm.db.Snapshot())
+	if snap, err := lm.db.Snapshot(); err != nil {
+		log.Error("could not seed library metrics from persisted state", "error", err)
+	} else {
+		lm.listener.OnSnapshot(snap)
+	}
 
 	return lm, nil
+}
+
+// packageStats reads the per-package aggregates used to label gauge events.
+// Metrics are best-effort: a read error is logged and reported as zeroed
+// stats so a metrics hiccup never fails the mount/unmount that triggered it.
+func (lm *LibraryManager) packageStats(library string) (cachedCount int, cachedBytes int64, volumeLinks int) {
+	cachedCount, cachedBytes, volumeLinks, err := lm.db.PackageStats(library)
+	if err != nil {
+		log.Error("could not read library stats for metrics", "library", library, "error", err)
+	}
+	return cachedCount, cachedBytes, volumeLinks
 }
 
 // Stop ensures all dependencies are stopped correctly.
@@ -238,14 +253,14 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
 
-	// Record the library in the metadata bucket and notify the listener.
-	// AddLibrary is the canonical writer for the per-library metadata; it
-	// must be called before LinkVolume so the volume-links aggregate has
-	// the right package name to associate the link with.
+	// Record the library so its package name and on-disk size are persisted.
+	// AddLibrary is the canonical writer for the per-library record; it must
+	// run before LinkVolume so the library record exists when the volume
+	// count is incremented.
 	if err := lm.db.AddLibrary(libraryID, lib.Name(), sizeBytes); err != nil {
 		return "", fmt.Errorf("could not record library metadata: %w", err)
 	}
-	count, totalBytes := lm.db.PackageCacheStats(lib.Name())
+	count, totalBytes, _ := lm.packageStats(lib.Name())
 	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
 
 	if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
@@ -256,51 +271,42 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	return storePath, nil
 }
 
-// linkVolume persists the library/volume link and notifies the listener
-// with the resulting per-library count. It is intentionally a tiny helper:
-// keeping the listener invocation paired with the LinkVolume call avoids
-// the easy mistake of forgetting one of the two.
+// linkVolume persists the library/volume link and notifies the listener with
+// the resulting per-library volume count. It is intentionally a tiny helper:
+// keeping the listener invocation paired with the LinkVolume call avoids the
+// easy mistake of forgetting one of the two.
 func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) error {
 	if err := lm.db.LinkVolume(libraryID, volumeID); err != nil {
 		return err
 	}
-	lm.listener.OnVolumeLinked(library, lm.db.VolumeLinkCount(library))
+	_, _, volumeLinks := lm.packageStats(library)
+	lm.listener.OnVolumeLinked(library, volumeLinks)
 	return nil
 }
 
 // RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
 // If there are no more uses of the library, it is also removed from disk.
 // Calling RemoveVolume for a volume that was never linked is a no-op.
-func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) error {
-	// Look up the linked library.
-	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
+func (lm *LibraryManager) RemoveVolume(_ context.Context, volumeID string) error {
+	// Unlink the volume. UnlinkVolume returns both the library it was linked
+	// to and that library's package name (read off the persisted record while
+	// decrementing the count), so we get the gauge label without a separate
+	// lookup before the link is wiped.
+	// Note: No lock needed here because:
+	// - UnlinkVolume is atomic (database has its own locking)
+	// - tryCleanupLibrary acquires the lock before checking and removing
+	libraryID, library, err := lm.db.UnlinkVolume(volumeID)
 	if err != nil {
-		return fmt.Errorf("could not determine which library was linked for volume %s: %w", volumeID, err)
+		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
 	}
 	if libraryID == "" {
 		// Nothing to do: the volume was never linked or has already been
 		// removed. We return nil here to keep idempotency.
 		return nil
 	}
-
-	// Resolve the library name now, before the link (and possibly the
-	// metadata) is wiped, so we can notify the listener with the right
-	// gauge label.
-	library, err := lm.db.PackageForLibrary(libraryID)
-	if err != nil {
-		return fmt.Errorf("could not resolve library for ID %s: %w", libraryID, err)
-	}
-
-	// Unlink the volume from the database.
-	// Note: No lock needed here because:
-	// - UnlinkVolume is atomic (database has its own locking)
-	// - tryCleanupLibrary acquires the lock before checking and removing
-	err = lm.db.UnlinkVolume(libraryID, volumeID)
-	if err != nil {
-		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
-	}
 	if library != "" {
-		lm.listener.OnVolumeUnlinked(library, lm.db.VolumeLinkCount(library))
+		_, _, volumeLinks := lm.packageStats(library)
+		lm.listener.OnVolumeUnlinked(library, volumeLinks)
 	}
 
 	// Schedule cleanup - tryCleanupLibrary will check if the library is still in use
@@ -318,42 +324,36 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
 
-	// Look up the library name up-front so every cleanup event carries the
-	// right label. Older entries on disk that predate the metadata bucket
-	// resolve to an empty string; the cached gauges are skipped for them
-	// (we never tracked them in the first place) but the cleanup counter
-	// is still incremented.
-	library, err := lm.db.PackageForLibrary(libraryID)
+	// Read the library record once: it carries both the package label every
+	// cleanup event needs and the live volume count. Legacy entries that
+	// predate per-library metadata resolve to an empty package; the gauges
+	// were never published for them, but the cleanup counter still fires.
+	info, _, err := lm.db.GetLibrary(libraryID)
 	if err != nil {
 		lm.listener.OnLibraryCleanup("", libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not get library for ID %s: %w", libraryID, err)
 	}
 
 	// Check if the library is still in use
-	count, err := lm.db.GetVolumeCount(libraryID)
-	if err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
-		return fmt.Errorf("could not get linked library count: %w", err)
-	}
-	if count > 0 {
-		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSkippedInUse, strategy)
+	if info.VolumeCount > 0 {
+		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", info.VolumeCount)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
 
 	if err := lm.store.Remove(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupFailed, strategy)
 		return err
 	}
 	if err := lm.db.RemoveLibrary(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not remove library metadata for %s: %w", libraryID, err)
 	}
-	if library != "" {
-		newCount, newBytes := lm.db.PackageCacheStats(library)
-		lm.listener.OnLibraryEvicted(library, newCount, newBytes)
+	if info.Package != "" {
+		newCount, newBytes, _ := lm.packageStats(info.Package)
+		lm.listener.OnLibraryEvicted(info.Package, newCount, newBytes)
 	}
-	lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSuccess, strategy)
+	lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupSuccess, strategy)
 	return nil
 }
