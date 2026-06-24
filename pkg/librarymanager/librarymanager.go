@@ -278,8 +278,16 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 // keeping the listener invocation paired with the LinkVolume call avoids the
 // easy mistake of forgetting one of the two.
 func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) error {
-	if err := lm.db.LinkVolume(libraryID, volumeID); err != nil {
+	previousLibraryID, err := lm.db.LinkVolume(libraryID, volumeID)
+	if err != nil {
 		return err
+	}
+	// If the volume was previously linked to a different library, the transfer
+	// may have dropped that library's volume count to zero. RemoveVolume is the
+	// only other place that schedules cleanup, so do it here too; otherwise the
+	// displaced library would linger on disk until the next restart.
+	if previousLibraryID != "" {
+		lm.cleanupStrategy.ScheduleCleanup(previousLibraryID, lm.tryCleanupLibrary)
 	}
 	_, _, volumeLinks := lm.packageStats(library)
 	lm.listener.OnVolumeLinked(library, volumeLinks)

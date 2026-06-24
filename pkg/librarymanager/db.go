@@ -246,15 +246,20 @@ func (db *Database) RemoveLibrary(libraryID string) error {
 // library/version without an intervening unlink) moves the link to the new
 // library and decrements the previous one, so a volume always maps to exactly
 // one library and the counts never drift.
-func (db *Database) LinkVolume(libraryID, volumeID string) error {
+//
+// It returns the ID of the library the volume was previously linked to when a
+// transfer happened (empty otherwise). Callers should treat a non-empty
+// previousLibraryID like an unlink and schedule cleanup for it, since the
+// transfer may have brought its volume count to zero.
+func (db *Database) LinkVolume(libraryID, volumeID string) (previousLibraryID string, err error) {
 	if libraryID == "" {
-		return fmt.Errorf("library ID cannot be blank")
+		return "", fmt.Errorf("library ID cannot be blank")
 	}
 	if volumeID == "" {
-		return fmt.Errorf("volume ID cannot be blank")
+		return "", fmt.Errorf("volume ID cannot be blank")
 	}
 
-	return db.bbolt.Update(func(tx *bbolt.Tx) error {
+	err = db.bbolt.Update(func(tx *bbolt.Tx) error {
 		volumesBkt := tx.Bucket([]byte(VolumesBucket))
 		librariesBkt := tx.Bucket([]byte(LibrariesBucket))
 		if volumesBkt == nil || librariesBkt == nil {
@@ -275,6 +280,7 @@ func (db *Database) LinkVolume(libraryID, volumeID string) error {
 			if existing.LibraryID == libraryID {
 				return nil
 			}
+			previousLibraryID = existing.LibraryID
 			oldRec, err := getLibrary(librariesBkt, existing.LibraryID)
 			if err != nil {
 				return err
@@ -297,6 +303,10 @@ func (db *Database) LinkVolume(libraryID, volumeID string) error {
 		rec.VolumeCount++
 		return putLibrary(librariesBkt, libraryID, rec)
 	})
+	if err != nil {
+		return "", err
+	}
+	return previousLibraryID, nil
 }
 
 // UnlinkVolume removes the link for a volume and decrements the owning
