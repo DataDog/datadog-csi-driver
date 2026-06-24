@@ -362,7 +362,7 @@ func (db *Database) GetLibrary(libraryID string) (LibraryInfo, bool, error) {
 			return fmt.Errorf("could not unmarshal library record: %w", err)
 		}
 		found = true
-		info = LibraryInfo{Package: rec.Package, SizeBytes: rec.SizeBytes, VolumeCount: rec.VolumeCount}
+		info = LibraryInfo(rec)
 		return nil
 	})
 	return info, found, err
