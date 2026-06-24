@@ -216,6 +216,18 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// we resolve, so we can defer LinkVolume to after we have confirmed
 	// the library is on disk and recorded in the metadata bucket.
 	lm.locker.Lock(libraryID)
+	// If linking this volume transfers it away from another library, that
+	// displaced library may now be unused. Schedule its cleanup only after the
+	// target lock above is released: registering this defer before the Unlock
+	// defer makes it run afterwards (defers are LIFO), so an
+	// ImmediateCleanupStrategy never locks the displaced library while we still
+	// hold this one — which would deadlock two opposite re-publishes.
+	var displacedLibraryID string
+	defer func() {
+		if displacedLibraryID != "" {
+			lm.cleanupStrategy.ScheduleCleanup(displacedLibraryID, lm.tryCleanupLibrary)
+		}
+	}()
 	defer lm.locker.Unlock(libraryID)
 
 	// If the library already exists, return it.
@@ -225,7 +237,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
-		if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+		if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
 			return "", err
 		}
 		result = libraryevents.ResolutionCacheHit
@@ -265,7 +277,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	count, totalBytes, _ := lm.packageStats(lib.Name())
 	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
 
-	if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+	if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
 		return "", err
 	}
 
@@ -277,21 +289,35 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 // the resulting per-library volume count. It is intentionally a tiny helper:
 // keeping the listener invocation paired with the LinkVolume call avoids the
 // easy mistake of forgetting one of the two.
-func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) error {
-	previousLibraryID, err := lm.db.LinkVolume(libraryID, volumeID)
+//
+// When the volume was already tracked under a different library (a re-publish
+// without an intervening unlink), LinkVolume transfers the link and decrements
+// the previous library. In that case linkVolume also emits the unlink gauge for
+// the displaced library — while its record still exists — and returns its ID so
+// the caller can schedule its cleanup once the current library lock is
+// released. Cleanup is deliberately not scheduled here: an
+// ImmediateCleanupStrategy would run it synchronously and lock the displaced
+// library while the caller still holds the target library lock, which could
+// deadlock two volumes re-published in opposite directions.
+func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) (displacedLibraryID string, err error) {
+	displacedLibraryID, err = lm.db.LinkVolume(libraryID, volumeID)
 	if err != nil {
-		return err
+		return "", err
 	}
-	// If the volume was previously linked to a different library, the transfer
-	// may have dropped that library's volume count to zero. RemoveVolume is the
-	// only other place that schedules cleanup, so do it here too; otherwise the
-	// displaced library would linger on disk until the next restart.
-	if previousLibraryID != "" {
-		lm.cleanupStrategy.ScheduleCleanup(previousLibraryID, lm.tryCleanupLibrary)
-	}
+
 	_, _, volumeLinks := lm.packageStats(library)
 	lm.listener.OnVolumeLinked(library, volumeLinks)
-	return nil
+
+	// The transfer decremented the displaced library's persisted count, so
+	// refresh its gauge now (before any cleanup can remove the record);
+	// otherwise library_volume_links would stay stale until the next restart.
+	if displacedLibraryID != "" {
+		if info, found, gerr := lm.db.GetLibrary(displacedLibraryID); gerr == nil && found && info.Package != "" {
+			_, _, displacedLinks := lm.packageStats(info.Package)
+			lm.listener.OnVolumeUnlinked(info.Package, displacedLinks)
+		}
+	}
+	return displacedLibraryID, nil
 }
 
 // RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
