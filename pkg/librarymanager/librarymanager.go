@@ -155,15 +155,17 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 	return lm, nil
 }
 
-// packageStats reads the per-package aggregates used to label gauge events.
-// Metrics are best-effort: a read error is logged and reported as zeroed
-// stats so a metrics hiccup never fails the mount/unmount that triggered it.
+// packageStats reads the per-package aggregates used to label gauge events by
+// indexing a fresh Snapshot. Metrics are best-effort: a read error is logged
+// and reported as zeroed stats so a metrics hiccup never fails the
+// mount/unmount that triggered it.
 func (lm *LibraryManager) packageStats(library string) (cachedCount int, cachedBytes int64, volumeLinks int) {
-	cachedCount, cachedBytes, volumeLinks, err := lm.db.PackageStats(library)
+	snap, err := lm.db.Snapshot()
 	if err != nil {
 		log.Error("could not read library stats for metrics", "library", library, "error", err)
+		return 0, 0, 0
 	}
-	return cachedCount, cachedBytes, volumeLinks
+	return snap.CachedCountByLibrary[library], snap.CachedBytesByLibrary[library], snap.VolumeLinksByLibrary[library]
 }
 
 // Stop ensures all dependencies are stopped correctly.

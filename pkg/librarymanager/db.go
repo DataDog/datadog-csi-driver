@@ -403,41 +403,6 @@ func (db *Database) Snapshot() (libraryevents.Snapshot, error) {
 	return snap, nil
 }
 
-// PackageStats returns the per-package aggregates for a single package: the
-// number of cached versions, their cumulative on-disk size in bytes, and the
-// number of volumes linked to any of them. It scans LibrariesBucket, which is
-// cheap because a node only ever caches a handful of libraries. It is the
-// per-package counterpart of Snapshot, used to label the gauge events the
-// manager emits on each state change.
-func (db *Database) PackageStats(packageName string) (cachedCount int, cachedBytes int64, volumeLinks int, err error) {
-	if packageName == "" {
-		return 0, 0, 0, nil
-	}
-	err = db.bbolt.View(func(tx *bbolt.Tx) error {
-		bkt := tx.Bucket([]byte(LibrariesBucket))
-		if bkt == nil {
-			return nil
-		}
-		return bkt.ForEach(func(_, v []byte) error {
-			var rec libraryRecord
-			if err := json.Unmarshal(v, &rec); err != nil {
-				return fmt.Errorf("could not unmarshal library record: %w", err)
-			}
-			if rec.Package != packageName {
-				return nil
-			}
-			cachedCount++
-			cachedBytes += rec.SizeBytes
-			volumeLinks += rec.VolumeCount
-			return nil
-		})
-	})
-	if err != nil {
-		return 0, 0, 0, err
-	}
-	return cachedCount, cachedBytes, volumeLinks, nil
-}
-
 // getLibrary reads and decodes a library record. A missing key yields a zero
 // record and no error so callers can treat it as an upsert base.
 func getLibrary(bkt *bbolt.Bucket, libraryID string) (libraryRecord, error) {
