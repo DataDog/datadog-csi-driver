@@ -271,6 +271,90 @@ func TestDatabaseVolumeLinksReloadedFromDisk(t *testing.T) {
 	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
 }
 
+// TestDatabaseRelinkVolumeToDifferentLibrary verifies that re-linking an
+// already-tracked volume to a different library (a volume re-published against
+// a new library/version without an intervening unlink) moves the link and
+// keeps both libraries' counts consistent.
+func TestDatabaseRelinkVolumeToDifferentLibrary(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	require.NoError(t, db.AddLibrary("old-lib", "dd-lib-java-init", 100))
+	require.NoError(t, db.AddLibrary("new-lib", "dd-lib-java-init", 200))
+
+	// Link the volume to the old library first.
+	require.NoError(t, db.LinkVolume("old-lib", "vol-1"))
+	require.Equal(t, 1, volumeCount(t, db, "old-lib"))
+	require.Equal(t, 0, volumeCount(t, db, "new-lib"))
+
+	// Re-linking the same volume to a different library transfers the link:
+	// the volume now maps to the new library and the old count is decremented.
+	require.NoError(t, db.LinkVolume("new-lib", "vol-1"))
+	lib, err := db.GetLibraryForVolume("vol-1")
+	require.NoError(t, err)
+	require.Equal(t, "new-lib", lib)
+	require.Equal(t, 0, volumeCount(t, db, "old-lib"), "old library is decremented on transfer")
+	require.Equal(t, 1, volumeCount(t, db, "new-lib"), "new library owns the volume")
+
+	// A subsequent unlink only affects the new (owning) library.
+	unlinked, _, err := db.UnlinkVolume("vol-1")
+	require.NoError(t, err)
+	require.Equal(t, "new-lib", unlinked)
+	require.Equal(t, 0, volumeCount(t, db, "old-lib"))
+	require.Equal(t, 0, volumeCount(t, db, "new-lib"))
+}
+
+// TestDatabaseMigrationDeduplicatesVolumeAcrossLibraries verifies that a
+// legacy database which mapped the same volume under more than one library
+// (possible because the legacy LinkVolume only checked the per-library bucket)
+// migrates the volume exactly once, so the owning library carries the only
+// count and the others are left at zero and remain cleanable.
+func TestDatabaseMigrationDeduplicatesVolumeAcrossLibraries(t *testing.T) {
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	dbPath := filepath.Join(tsd.Path(t), librarymanager.DatabaseFileName)
+
+	legacy, err := bbolt.Open(dbPath, 0600, nil)
+	require.NoError(t, err)
+	require.NoError(t, legacy.Update(func(tx *bbolt.Tx) error {
+		mappings, err := tx.CreateBucketIfNotExists([]byte("library-mappings"))
+		if err != nil {
+			return err
+		}
+		// The same volume appears under two libraries.
+		for _, libID := range []string{"lib-a", "lib-b"} {
+			libBkt, err := mappings.CreateBucketIfNotExists([]byte(libID))
+			if err != nil {
+				return err
+			}
+			if err := libBkt.Put([]byte("shared-vol"), []byte("{}")); err != nil {
+				return err
+			}
+		}
+		return nil
+	}))
+	require.NoError(t, legacy.Close())
+
+	db, err := librarymanager.NewDatabase(tsd.Path(t))
+	require.NoError(t, err)
+	defer db.Close()
+
+	// The volume maps to exactly one library.
+	lib, err := db.GetLibraryForVolume("shared-vol")
+	require.NoError(t, err)
+	require.Contains(t, []string{"lib-a", "lib-b"}, lib)
+
+	// The shared volume is counted exactly once, by the owning library only.
+	require.Equal(t, 1, volumeCount(t, db, "lib-a")+volumeCount(t, db, "lib-b"),
+		"the shared volume is counted exactly once across libraries")
+	require.Equal(t, 1, volumeCount(t, db, lib), "the owning library carries the only count")
+}
+
 // TestDatabaseMigratesLegacySchema seeds a database with the legacy
 // nested-bucket schema (library-mappings/volume-mappings/library-metadata)
 // and verifies NewDatabase rewrites it into the flat volumes/libraries schema

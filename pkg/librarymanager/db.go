@@ -150,6 +150,20 @@ func migrate(tx *bbolt.Tx) error {
 				return nil
 			}
 			return libBkt.ForEach(func(volumeKey, _ []byte) error {
+				// The legacy LinkVolume only checked the per-library
+				// sub-bucket, so the same volume could be mapped under
+				// several libraries. Migrate each volume exactly once
+				// (first writer wins) so the flat record and the owning
+				// library's VolumeCount stay consistent. Counting every
+				// occurrence would leave the overwritten libraries with a
+				// positive count for a volume they no longer own, so they
+				// would never be cleaned up and their gauges would stay
+				// inflated.
+				if _, migrated, err := getVolume(volumesBkt, string(volumeKey)); err != nil {
+					return err
+				} else if migrated {
+					return nil
+				}
 				if err := putVolume(volumesBkt, string(volumeKey), volumeRecord{LibraryID: libraryID}); err != nil {
 					return err
 				}
@@ -226,8 +240,12 @@ func (db *Database) RemoveLibrary(libraryID string) error {
 }
 
 // LinkVolume records that volumeID uses libraryID and increments the
-// library's volume count. It is idempotent: linking an already-linked volume
-// is a no-op.
+// library's volume count. Re-linking a volume to the same library is an
+// idempotent no-op. Re-linking a volume that is already tracked under a
+// different library (for instance a volume re-published against a new
+// library/version without an intervening unlink) moves the link to the new
+// library and decrements the previous one, so a volume always maps to exactly
+// one library and the counts never drift.
 func (db *Database) LinkVolume(libraryID, volumeID string) error {
 	if libraryID == "" {
 		return fmt.Errorf("library ID cannot be blank")
@@ -243,12 +261,30 @@ func (db *Database) LinkVolume(libraryID, volumeID string) error {
 			return fmt.Errorf("database buckets do not exist")
 		}
 
-		// If the volume is already tracked there is nothing to do; skip the
-		// write and the count update to keep the operation idempotent.
-		if _, linked, err := getVolume(volumesBkt, volumeID); err != nil {
+		// Inspect any existing link for this volume. Re-linking to the same
+		// library is a no-op (keeps the operation idempotent). Re-linking to
+		// a different library means the volume was re-published against a new
+		// library without an intervening unlink: decrement the previous
+		// library before re-pointing the volume below, so the volume stays
+		// mapped to exactly one library and the counts never drift.
+		existing, linked, err := getVolume(volumesBkt, volumeID)
+		if err != nil {
 			return err
-		} else if linked {
-			return nil
+		}
+		if linked {
+			if existing.LibraryID == libraryID {
+				return nil
+			}
+			oldRec, err := getLibrary(librariesBkt, existing.LibraryID)
+			if err != nil {
+				return err
+			}
+			if oldRec.VolumeCount > 0 {
+				oldRec.VolumeCount--
+				if err := putLibrary(librariesBkt, existing.LibraryID, oldRec); err != nil {
+					return err
+				}
+			}
 		}
 
 		if err := putVolume(volumesBkt, volumeID, volumeRecord{LibraryID: libraryID}); err != nil {
