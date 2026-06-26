@@ -140,6 +140,9 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	path = filepath.Join(basePath, source)
 	path, err = validateLibrarySourcePath(basePath, path)
 	if err != nil {
+		if removeErr := s.libraryManager.RemoveVolume(context.Background(), volumeID); removeErr != nil {
+			return "", lib.Image(), fmt.Errorf("%w; additionally failed to roll back volume link: %v", err, removeErr)
+		}
 		return "", lib.Image(), err
 	}
 

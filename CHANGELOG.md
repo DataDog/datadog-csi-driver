@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LinkVolume` now happens after the library has been confirmed on disk (cache hit) or recorded in the metadata bucket (successful download). This prevents dangling links if the download fails, and gives `library_volume_links` a stable library label.
 - `RemoveVolume` is now a no-op when the volume was never linked.
 
+### Fixed
+
+- Fixed `DatadogLibrary` volume publishing to reject library source paths that resolve outside the downloaded library directory.
+
 ### Notes
 
 - Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` or `library_volume_links` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.
@@ -33,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed `DatadogLibrary` volume publishing to reject library source paths that resolve outside the downloaded library directory.
 - Fixed driver startup to disable SSI publishers when `storageBasePath` is not writable instead of failing initialization
 
 ## [1.2.1] - 2026-02-03

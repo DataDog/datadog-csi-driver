@@ -249,6 +249,9 @@ func TestLibraryPublisher_Publish_RejectsSymlinkedLibrarySource(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "library source path")
 	assert.Empty(t, mounter.GetLog(), "publish must reject the source before bind mounting")
+	hasVolume, err := lm.HasVolume(req.GetVolumeId())
+	require.NoError(t, err)
+	assert.False(t, hasVolume, "failed publish must not leave the volume linked")
 }
 
 func TestRegistryAllowed(t *testing.T) {
