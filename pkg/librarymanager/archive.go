@@ -55,7 +55,9 @@ func (fp *ArchiveExtractor) Extract(ctx context.Context, reader io.Reader) (int6
 	if err != nil {
 		return 0, fmt.Errorf("could not open destination root %s: %w", fp.dst, err)
 	}
-	defer root.Close()
+	defer func() {
+		_ = root.Close()
+	}()
 	fp.root = root
 	defer func() { fp.root = nil }()
 
@@ -85,7 +87,7 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		return nil
 	}
 
-	mode := f.FileInfo.Mode()
+	mode := f.Mode()
 	switch {
 	case mode.IsDir():
 		return fp.root.Mkdir(destPath, 0o755)
@@ -111,13 +113,17 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		if err != nil {
 			return fmt.Errorf("could not open file in archive: %w", err)
 		}
-		defer in.Close()
+		defer func() {
+			_ = in.Close()
+		}()
 
 		out, err := fp.root.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create destination file: %w", err)
 		}
-		defer out.Close()
+		defer func() {
+			_ = out.Close()
+		}()
 
 		n, err := io.Copy(out, in)
 		if err != nil {
