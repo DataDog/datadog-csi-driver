@@ -225,7 +225,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	// Download the library into the scratch space.
 	log.Info("Downloading library", "image", lib.Image())
 	downloadStart := time.Now()
-	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
+	sizeBytes, err := lm.downloader.Download(ctx, lib.Image(), scratch)
 	if err != nil {
 		return "", err
 	}

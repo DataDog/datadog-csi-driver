@@ -15,7 +15,6 @@ import (
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -69,7 +68,7 @@ func TestExtract(t *testing.T) {
 
 			// Extract archive.
 			ctx := context.Background()
-			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, test.source, tsd.Path(t))
+			ae, err := librarymanager.NewArchiveExtractor(test.source, tsd.Path(t))
 			require.NoError(t, err, "could not setup extractor")
 			_, err = ae.Extract(ctx, f)
 			require.NoError(t, err, "could not extract archive")
@@ -108,7 +107,7 @@ func TestExtractSymlink(t *testing.T) {
 	defer f.Close()
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 	_, err = ae.Extract(ctx, f)
 	require.NoError(t, err)
@@ -156,7 +155,7 @@ func TestExtractSymlinkPathTraversal(t *testing.T) {
 			defer f.Close()
 
 			ctx := context.Background()
-			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+			ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 			require.NoError(t, err)
 
 			// Extraction should succeed - malicious paths are normalized, not rejected
@@ -203,7 +202,7 @@ func TestExtractDoesNotFollowSymlinkOutsideDestination(t *testing.T) {
 	tsd := testutil.NewTempScratchDirectory(t)
 	defer tsd.Cleanup(t)
 
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 	_, err = ae.Extract(context.Background(), &archive)
 	require.Error(t, err)
@@ -229,7 +228,7 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 	defer tsd.Cleanup(t)
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 
 	// First extraction
@@ -250,7 +249,7 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	defer f2.Close()
 
-	ae2, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae2, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 	_, err = ae2.Extract(ctx, f2)
 	require.NoError(t, err, "second extraction should succeed when symlink already exists with same target")
@@ -281,7 +280,7 @@ func TestExtractSymlinkNoTarget(t *testing.T) {
 	defer archive.Close()
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 
 	_, err = ae.Extract(ctx, archive)

@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/mholt/archives"
-	"github.com/spf13/afero"
 )
 
 // ArchiveExtractor extracts directories from a tar archive.
@@ -31,12 +30,12 @@ type ArchiveExtractor struct {
 }
 
 // NewArchiveExtractor initializes a new archive extractor.
-func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtractor, error) {
+func NewArchiveExtractor(src string, dst string) (*ArchiveExtractor, error) {
 	destination, err := filepath.Abs(filepath.Clean(dst))
 	if err != nil {
 		return nil, fmt.Errorf("could not get absolute path for destination %s: %w", dst, err)
 	}
-	if err := afs.MkdirAll(destination, 0o755); err != nil {
+	if err := os.MkdirAll(destination, 0o755); err != nil {
 		return nil, fmt.Errorf("could not create destination %s: %w", destination, err)
 	}
 	return &ArchiveExtractor{
