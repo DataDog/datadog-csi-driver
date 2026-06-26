@@ -25,13 +25,10 @@ func volumeCount(t *testing.T, db *librarymanager.Database, libraryID string) in
 	return info.VolumeCount
 }
 
-// link is a small helper to link a volume and assert success, discarding the
-// previous-library return value that only matters in transfer scenarios (which
-// are exercised explicitly by TestDatabaseRelinkVolumeToDifferentLibrary).
+// link is a small helper to link a volume and assert success.
 func link(t *testing.T, db *librarymanager.Database, libraryID, volumeID string) {
 	t.Helper()
-	_, err := db.LinkVolume(libraryID, volumeID, false)
-	require.NoError(t, err)
+	require.NoError(t, db.LinkVolume(libraryID, volumeID, false))
 }
 
 func TestDatabase(t *testing.T) {
@@ -61,7 +58,7 @@ func TestDatabase(t *testing.T) {
 	require.Empty(t, pkg, "unlinking an unknown volume reports no package")
 
 	// Ensure a linked volume is linked.
-	_, err = db.LinkVolume(libraryID, volumeID, false)
+	err = db.LinkVolume(libraryID, volumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -69,7 +66,7 @@ func TestDatabase(t *testing.T) {
 	require.Equal(t, 1, volumeCount(t, db, libraryID), "there should be one volume linked")
 
 	// Ensure a second call to link the same volume does nothing.
-	_, err = db.LinkVolume(libraryID, volumeID, false)
+	err = db.LinkVolume(libraryID, volumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -78,7 +75,7 @@ func TestDatabase(t *testing.T) {
 
 	// Ensure a second linked volume shows both.
 	secondVolumeID := "test-volume-id-two"
-	_, err = db.LinkVolume(libraryID, secondVolumeID, false)
+	err = db.LinkVolume(libraryID, secondVolumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -278,50 +275,6 @@ func TestDatabaseVolumeLinksReloadedFromDisk(t *testing.T) {
 	snap, err := db2.Snapshot()
 	require.NoError(t, err)
 	require.Equal(t, 2, snap.VolumeLinksByLibrary["dd-lib-java-init"])
-}
-
-// TestDatabaseRelinkVolumeToDifferentLibrary verifies that re-linking an
-// already-tracked volume to a different library (a volume re-published against
-// a new library/version without an intervening unlink) moves the link and
-// keeps both libraries' counts consistent.
-func TestDatabaseRelinkVolumeToDifferentLibrary(t *testing.T) {
-	tsd := testutil.NewTempScratchDirectory(t)
-	defer tsd.Cleanup(t)
-
-	db, err := librarymanager.NewDatabase(tsd.Path(t))
-	require.NoError(t, err)
-	defer db.Close()
-
-	require.NoError(t, db.AddLibrary("old-lib", "dd-lib-java-init", 100))
-	require.NoError(t, db.AddLibrary("new-lib", "dd-lib-java-init", 200))
-
-	// Link the volume to the old library first. A fresh link reports no
-	// previous library.
-	previous, err := db.LinkVolume("old-lib", "vol-1", false)
-	require.NoError(t, err)
-	require.Empty(t, previous, "a fresh link has no previous library")
-	require.Equal(t, 1, volumeCount(t, db, "old-lib"))
-	require.Equal(t, 0, volumeCount(t, db, "new-lib"))
-
-	// Re-linking the same volume to a different library transfers the link:
-	// the volume now maps to the new library, the old count is decremented,
-	// and the displaced library is reported so the caller can schedule its
-	// cleanup.
-	previous, err = db.LinkVolume("new-lib", "vol-1", true)
-	require.NoError(t, err)
-	require.Equal(t, "old-lib", previous, "transfer reports the displaced library")
-	lib, err := db.GetLibraryForVolume("vol-1")
-	require.NoError(t, err)
-	require.Equal(t, "new-lib", lib)
-	require.Equal(t, 0, volumeCount(t, db, "old-lib"), "old library is decremented on transfer")
-	require.Equal(t, 1, volumeCount(t, db, "new-lib"), "new library owns the volume")
-
-	// A subsequent unlink only affects the new (owning) library.
-	unlinked, _, err := db.UnlinkVolume("vol-1")
-	require.NoError(t, err)
-	require.Equal(t, "new-lib", unlinked)
-	require.Equal(t, 0, volumeCount(t, db, "old-lib"))
-	require.Equal(t, 0, volumeCount(t, db, "new-lib"))
 }
 
 // TestDatabaseMigrationDeduplicatesVolumeAcrossLibraries verifies that a

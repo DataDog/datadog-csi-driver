@@ -187,6 +187,64 @@ func TestLibraryManagerEmitsLifecycleEvents(t *testing.T) {
 		"the library should be removed once unused")
 }
 
+// TestLibraryManagerReusesLibraryForRepublishedVolume verifies that
+// re-publishing an already-linked volume reuses the library it was first linked
+// to, without re-resolving the image. Even when the (mutable) tag no longer
+// resolves, the volume keeps its original library: the call succeeds with a
+// cache hit and records no extra download, cache, or link.
+func TestLibraryManagerReusesLibraryForRepublishedVolume(t *testing.T) {
+	localRegistry := testutil.NewLocalRegistry(t)
+	defer localRegistry.Stop()
+	localRegistry.AddImage(t, "testdata/image.tar", "test-image", "latest")
+
+	d := librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+	ctx := context.Background()
+
+	rec := &recordingListener{}
+	lm, err := librarymanager.NewLibraryManager(tsd.Path(t),
+		librarymanager.WithFilesystem(afero.Afero{Fs: afero.NewOsFs()}),
+		librarymanager.WithDownloader(d),
+		librarymanager.WithEventListener(rec),
+	)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, lm.Stop()) }()
+	rec.drain() // discard the startup snapshot
+
+	lib, err := librarymanager.NewLibrary("test-image", localRegistry.Registry(t), "latest", false)
+	require.NoError(t, err)
+
+	// First publish: cache miss -> download and link.
+	firstPath, err := lm.GetLibraryForVolume(ctx, "vol-1", lib)
+	require.NoError(t, err)
+	first := rec.drain()
+	require.Equal(t, libraryevents.ResolutionDownloaded, singleEvent(t, first, "resolved").result)
+	require.Equal(t, 1, singleEvent(t, first, "linked").links)
+
+	// Re-publish the same volume with a tag that no longer resolves (pull
+	// forced, so a resolution attempt would fail). The volume is already
+	// linked, so the manager must reuse its library without touching the
+	// registry: no error, no download, no new link.
+	stale, err := librarymanager.NewLibrary("test-image", localRegistry.Registry(t), "does-not-exist", true)
+	require.NoError(t, err)
+	reusedPath, err := lm.GetLibraryForVolume(ctx, "vol-1", stale)
+	require.NoError(t, err)
+	require.Equal(t, firstPath, reusedPath, "a re-published volume must reuse its original library path")
+
+	second := rec.drain()
+	require.Equal(t, libraryevents.ResolutionCacheHit, singleEvent(t, second, "resolved").result)
+	require.Empty(t, eventsOfKind(second, "download"), "reusing a linked volume must not download")
+	require.Empty(t, eventsOfKind(second, "cached"), "reusing a linked volume must not re-cache")
+	require.Empty(t, eventsOfKind(second, "linked"), "reusing a linked volume must not add a link")
+
+	// The library was referenced exactly once, so removing the volume evicts it.
+	require.NoError(t, lm.RemoveVolume(ctx, "vol-1"))
+	afterRemove := rec.drain()
+	require.Equal(t, 0, singleEvent(t, afterRemove, "unlinked").links)
+	require.Equal(t, libraryevents.CleanupSuccess, singleEvent(t, afterRemove, "cleanup").status)
+}
+
 // TestLibraryManagerEmitsFailedResolution checks that a resolution failure
 // (here, an image that cannot be resolved) surfaces as a "failed" resolution
 // and does not link a volume.

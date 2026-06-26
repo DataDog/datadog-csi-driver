@@ -251,60 +251,34 @@ func (db *Database) RemoveLibrary(libraryID string) error {
 // already-cached library or had to download it; it is persisted on the record
 // together with a creation timestamp.
 //
-// Re-linking a volume to the same library is an idempotent no-op. Re-linking a
-// volume that is already tracked under a different library moves the link to
-// the new library and decrements the previous one, so a volume always maps to
-// exactly one library and the counts never drift. This transfer happens when a
-// volume is re-published and resolves to a different library ID without an
-// intervening unlink — for instance a mutable tag (such as ":latest") whose
-// digest changed between a publish that failed after linking and the kubelet's
-// retry.
-//
-// It returns the ID of the library the volume was previously linked to when a
-// transfer happened (empty otherwise). Callers should treat a non-empty
-// previousLibraryID like an unlink and schedule cleanup for it, since the
-// transfer may have brought its volume count to zero.
-func (db *Database) LinkVolume(libraryID, volumeID string, fromCache bool) (previousLibraryID string, err error) {
+// A volume maps to exactly one library for its whole lifetime: callers resolve
+// an already-linked volume from its existing record instead of re-resolving the
+// image, so LinkVolume is only reached for volumes that are not yet linked.
+// Linking a volume that is already tracked is therefore treated as an
+// idempotent no-op rather than re-pointing it, which keeps the per-library
+// counts from drifting even if the function is called twice.
+func (db *Database) LinkVolume(libraryID, volumeID string, fromCache bool) error {
 	if libraryID == "" {
-		return "", fmt.Errorf("library ID cannot be blank")
+		return fmt.Errorf("library ID cannot be blank")
 	}
 	if volumeID == "" {
-		return "", fmt.Errorf("volume ID cannot be blank")
+		return fmt.Errorf("volume ID cannot be blank")
 	}
 
-	err = db.bbolt.Update(func(tx *bbolt.Tx) error {
+	return db.bbolt.Update(func(tx *bbolt.Tx) error {
 		volumesBkt := tx.Bucket([]byte(VolumesBucket))
 		librariesBkt := tx.Bucket([]byte(LibrariesBucket))
 		if volumesBkt == nil || librariesBkt == nil {
 			return fmt.Errorf("database buckets do not exist")
 		}
 
-		// Inspect any existing link for this volume. Re-linking to the same
-		// library is a no-op (keeps the operation idempotent). Re-linking to
-		// a different library means the volume resolved to a new library ID
-		// without an intervening unlink (e.g. a mutable tag whose digest
-		// changed across a failed publish and the following retry): decrement
-		// the previous library before re-pointing the volume below, so the
-		// volume stays mapped to exactly one library and the counts never drift.
-		existing, linked, err := getVolume(volumesBkt, volumeID)
-		if err != nil {
+		// A volume is only ever linked once (re-publishes reuse the existing
+		// record upstream). If a record already exists, stay idempotent and
+		// do not touch the counts.
+		if _, linked, err := getVolume(volumesBkt, volumeID); err != nil {
 			return err
-		}
-		if linked {
-			if existing.LibraryID == libraryID {
-				return nil
-			}
-			previousLibraryID = existing.LibraryID
-			oldRec, err := getLibrary(librariesBkt, existing.LibraryID)
-			if err != nil {
-				return err
-			}
-			if oldRec.VolumeCount > 0 {
-				oldRec.VolumeCount--
-				if err := putLibrary(librariesBkt, existing.LibraryID, oldRec); err != nil {
-					return err
-				}
-			}
+		} else if linked {
+			return nil
 		}
 
 		if err := putVolume(volumesBkt, volumeID, volumeRecord{
@@ -321,10 +295,6 @@ func (db *Database) LinkVolume(libraryID, volumeID string, fromCache bool) (prev
 		rec.VolumeCount++
 		return putLibrary(librariesBkt, libraryID, rec)
 	})
-	if err != nil {
-		return "", err
-	}
-	return previousLibraryID, nil
 }
 
 // UnlinkVolume removes the link for a volume and decrements the owning
