@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `LinkVolume` now happens after the library has been confirmed on disk (cache hit) or recorded in the metadata bucket (successful download). This prevents dangling links if the download fails, and gives `library_volume_links` a stable library label.
 - `RemoveVolume` is now a no-op when the volume was never linked.
 
+### Fixed
+
+- Fixed `DatadogLibrary` and `DatadogInjectorPreload` volume publishing to remount bind mounts as read-only.
+
 ### Notes
 
 - Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` or `library_volume_links` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.

@@ -18,8 +18,8 @@ import (
 // bindMount performs a bind mount from hostPath to targetPath.
 // It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
 // Returns nil if already mounted or mount succeeds.
-func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool) error {
-	slog.Info("bindMount: mounting", "host_path", hostPath, "target_path", targetPath)
+func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath string, isFile bool, readOnly bool) error {
+	slog.Info("bindMount: mounting", "host_path", hostPath, "target_path", targetPath, "read_only", readOnly)
 
 	// Verify source path exists before attempting mount
 	exists, err := afs.Exists(hostPath)
@@ -49,11 +49,17 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 			slog.Error("bindMount: failed to mount", "error", err, "host_path", hostPath, "target_path", targetPath)
 			return status.Errorf(codes.Internal, "bindMount: failed to mount: %v", err)
 		}
+		if readOnly {
+			if err := mounter.Mount(hostPath, targetPath, "", []string{"bind", "remount", "ro"}); err != nil {
+				slog.Error("bindMount: failed to remount read-only", "error", err, "host_path", hostPath, "target_path", targetPath)
+				return status.Errorf(codes.Internal, "bindMount: failed to remount read-only: %v", err)
+			}
+		}
 	} else {
 		slog.Info("bindMount: already mounted, skipping", "target_path", targetPath)
 	}
 
-	slog.Info("bindMount: successfully mounted", "host_path", hostPath, "target_path", targetPath)
+	slog.Info("bindMount: successfully mounted", "host_path", hostPath, "target_path", targetPath, "read_only", readOnly)
 	return nil
 }
 

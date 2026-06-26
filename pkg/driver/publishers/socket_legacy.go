@@ -63,7 +63,7 @@ func (s socketLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publ
 		return resp, fmt.Errorf("socket not found at %q", hostPath)
 	}
 
-	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, true)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, true, false)
 }
 
 func (s socketLegacyPublisher) Unpublish(*csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {

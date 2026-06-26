@@ -55,7 +55,7 @@ func (s localLegacyPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publi
 		return resp, fmt.Errorf("path %q is not allowed; permitted paths are %v", hostPath, allowedPaths)
 	}
 
-	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
+	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false, false)
 }
 
 func (s localLegacyPublisher) Unpublish(*csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
