@@ -30,7 +30,7 @@ func volumeCount(t *testing.T, db *librarymanager.Database, libraryID string) in
 // are exercised explicitly by TestDatabaseRelinkVolumeToDifferentLibrary).
 func link(t *testing.T, db *librarymanager.Database, libraryID, volumeID string) {
 	t.Helper()
-	_, err := db.LinkVolume(libraryID, volumeID)
+	_, err := db.LinkVolume(libraryID, volumeID, false)
 	require.NoError(t, err)
 }
 
@@ -61,7 +61,7 @@ func TestDatabase(t *testing.T) {
 	require.Empty(t, pkg, "unlinking an unknown volume reports no package")
 
 	// Ensure a linked volume is linked.
-	_, err = db.LinkVolume(libraryID, volumeID)
+	_, err = db.LinkVolume(libraryID, volumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -69,7 +69,7 @@ func TestDatabase(t *testing.T) {
 	require.Equal(t, 1, volumeCount(t, db, libraryID), "there should be one volume linked")
 
 	// Ensure a second call to link the same volume does nothing.
-	_, err = db.LinkVolume(libraryID, volumeID)
+	_, err = db.LinkVolume(libraryID, volumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -78,7 +78,7 @@ func TestDatabase(t *testing.T) {
 
 	// Ensure a second linked volume shows both.
 	secondVolumeID := "test-volume-id-two"
-	_, err = db.LinkVolume(libraryID, secondVolumeID)
+	_, err = db.LinkVolume(libraryID, secondVolumeID, false)
 	require.NoError(t, err)
 	lib, err = db.GetLibraryForVolume(volumeID)
 	require.NoError(t, err)
@@ -297,7 +297,7 @@ func TestDatabaseRelinkVolumeToDifferentLibrary(t *testing.T) {
 
 	// Link the volume to the old library first. A fresh link reports no
 	// previous library.
-	previous, err := db.LinkVolume("old-lib", "vol-1")
+	previous, err := db.LinkVolume("old-lib", "vol-1", false)
 	require.NoError(t, err)
 	require.Empty(t, previous, "a fresh link has no previous library")
 	require.Equal(t, 1, volumeCount(t, db, "old-lib"))
@@ -307,7 +307,7 @@ func TestDatabaseRelinkVolumeToDifferentLibrary(t *testing.T) {
 	// the volume now maps to the new library, the old count is decremented,
 	// and the displaced library is reported so the caller can schedule its
 	// cleanup.
-	previous, err = db.LinkVolume("new-lib", "vol-1")
+	previous, err = db.LinkVolume("new-lib", "vol-1", true)
 	require.NoError(t, err)
 	require.Equal(t, "old-lib", previous, "transfer reports the displaced library")
 	lib, err := db.GetLibraryForVolume("vol-1")

@@ -237,7 +237,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
-		if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+		if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name(), true); err != nil {
 			return "", err
 		}
 		result = libraryevents.ResolutionCacheHit
@@ -277,7 +277,7 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	count, totalBytes, _ := lm.packageStats(lib.Name())
 	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
 
-	if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+	if displacedLibraryID, err = lm.linkVolume(libraryID, volumeID, lib.Name(), false); err != nil {
 		return "", err
 	}
 
@@ -299,8 +299,8 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 // ImmediateCleanupStrategy would run it synchronously and lock the displaced
 // library while the caller still holds the target library lock, which could
 // deadlock two volumes re-published in opposite directions.
-func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) (displacedLibraryID string, err error) {
-	displacedLibraryID, err = lm.db.LinkVolume(libraryID, volumeID)
+func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string, fromCache bool) (displacedLibraryID string, err error) {
+	displacedLibraryID, err = lm.db.LinkVolume(libraryID, volumeID, fromCache)
 	if err != nil {
 		return "", err
 	}

@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/libraryevents"
 	"go.etcd.io/bbolt"
@@ -41,6 +42,12 @@ const (
 type volumeRecord struct {
 	// LibraryID is the ID of the library the volume is mounted from.
 	LibraryID string `json:"library_id"`
+	// CreatedAt is when the link was recorded. Records migrated from the
+	// legacy schema have a zero value.
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// FromCache reports whether the publish that created this link reused an
+	// already-cached library (true) or had to download it first (false).
+	FromCache bool `json:"from_cache,omitempty"`
 }
 
 // libraryRecord is the value stored in LibrariesBucket.
@@ -240,18 +247,24 @@ func (db *Database) RemoveLibrary(libraryID string) error {
 }
 
 // LinkVolume records that volumeID uses libraryID and increments the
-// library's volume count. Re-linking a volume to the same library is an
-// idempotent no-op. Re-linking a volume that is already tracked under a
-// different library (for instance a volume re-published against a new
-// library/version without an intervening unlink) moves the link to the new
-// library and decrements the previous one, so a volume always maps to exactly
-// one library and the counts never drift.
+// library's volume count. fromCache notes whether the publish reused an
+// already-cached library or had to download it; it is persisted on the record
+// together with a creation timestamp.
+//
+// Re-linking a volume to the same library is an idempotent no-op. Re-linking a
+// volume that is already tracked under a different library moves the link to
+// the new library and decrements the previous one, so a volume always maps to
+// exactly one library and the counts never drift. This transfer happens when a
+// volume is re-published and resolves to a different library ID without an
+// intervening unlink — for instance a mutable tag (such as ":latest") whose
+// digest changed between a publish that failed after linking and the kubelet's
+// retry.
 //
 // It returns the ID of the library the volume was previously linked to when a
 // transfer happened (empty otherwise). Callers should treat a non-empty
 // previousLibraryID like an unlink and schedule cleanup for it, since the
 // transfer may have brought its volume count to zero.
-func (db *Database) LinkVolume(libraryID, volumeID string) (previousLibraryID string, err error) {
+func (db *Database) LinkVolume(libraryID, volumeID string, fromCache bool) (previousLibraryID string, err error) {
 	if libraryID == "" {
 		return "", fmt.Errorf("library ID cannot be blank")
 	}
@@ -268,10 +281,11 @@ func (db *Database) LinkVolume(libraryID, volumeID string) (previousLibraryID st
 
 		// Inspect any existing link for this volume. Re-linking to the same
 		// library is a no-op (keeps the operation idempotent). Re-linking to
-		// a different library means the volume was re-published against a new
-		// library without an intervening unlink: decrement the previous
-		// library before re-pointing the volume below, so the volume stays
-		// mapped to exactly one library and the counts never drift.
+		// a different library means the volume resolved to a new library ID
+		// without an intervening unlink (e.g. a mutable tag whose digest
+		// changed across a failed publish and the following retry): decrement
+		// the previous library before re-pointing the volume below, so the
+		// volume stays mapped to exactly one library and the counts never drift.
 		existing, linked, err := getVolume(volumesBkt, volumeID)
 		if err != nil {
 			return err
@@ -293,7 +307,11 @@ func (db *Database) LinkVolume(libraryID, volumeID string) (previousLibraryID st
 			}
 		}
 
-		if err := putVolume(volumesBkt, volumeID, volumeRecord{LibraryID: libraryID}); err != nil {
+		if err := putVolume(volumesBkt, volumeID, volumeRecord{
+			LibraryID: libraryID,
+			CreatedAt: time.Now().UTC(),
+			FromCache: fromCache,
+		}); err != nil {
 			return err
 		}
 		rec, err := getLibrary(librariesBkt, libraryID)
