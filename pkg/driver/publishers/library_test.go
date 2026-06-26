@@ -6,6 +6,7 @@
 package publishers
 
 import (
+	"archive/tar"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,10 @@ import (
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/container-storage-interface/spec/lib/go/csi"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -208,6 +213,44 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 		"mount source should contain library path, got: %s", mountLog[0].Source)
 }
 
+func TestLibraryPublisher_Publish_RejectsSymlinkedLibrarySource(t *testing.T) {
+	localRegistry := testutil.NewLocalRegistry(t)
+	defer localRegistry.Stop()
+	imageTar := createSymlinkedLibrarySourceImage(t, "/")
+	localRegistry.AddImage(t, imageTar, "symlinked-library", "v1.0.0")
+
+	basePath := t.TempDir()
+	fs := afero.Afero{Fs: afero.NewOsFs()}
+	lm, err := librarymanager.NewLibraryManager(basePath,
+		librarymanager.WithFilesystem(fs),
+		librarymanager.WithDownloader(librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))),
+	)
+	require.NoError(t, err)
+	defer lm.Stop()
+
+	mounter := mount.NewFakeMounter(nil)
+	publisher := newLibraryPublisher(fs, mounter, lm, false, nil)
+	req := &csi.NodePublishVolumeRequest{
+		VolumeId:   "test-volume-symlinked-source",
+		TargetPath: filepath.Join(t.TempDir(), "target", "library"),
+		Readonly:   true,
+		VolumeContext: map[string]string{
+			"type":                                "DatadogLibrary",
+			"dd.csi.datadog.com/library.package":  "symlinked-library",
+			"dd.csi.datadog.com/library.registry": localRegistry.Registry(t),
+			"dd.csi.datadog.com/library.version":  "v1.0.0",
+		},
+	}
+
+	resp, err := publisher.Publish(req)
+
+	require.NotNil(t, resp)
+	assert.Equal(t, DatadogLibrary, resp.VolumeType)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "library source path")
+	assert.Empty(t, mounter.GetLog(), "publish must reject the source before bind mounting")
+}
+
 func TestRegistryAllowed(t *testing.T) {
 	tests := map[string]struct {
 		registry      string
@@ -242,6 +285,51 @@ func TestRegistryAllowed(t *testing.T) {
 			assert.Equal(t, tc.expectAllowed, publisher.registryAllowed(tc.registry))
 		})
 	}
+}
+
+func createSymlinkedLibrarySourceImage(t *testing.T, linkTarget string) string {
+	t.Helper()
+
+	rootfs := filepath.Join(t.TempDir(), "rootfs.tar")
+	f, err := os.Create(rootfs)
+	require.NoError(t, err)
+
+	tw := tar.NewWriter(f)
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "datadog-init",
+		Typeflag: tar.TypeDir,
+		Mode:     0755,
+	}))
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "datadog-init/package",
+		Typeflag: tar.TypeSymlink,
+		Linkname: linkTarget,
+		Mode:     0777,
+	}))
+	require.NoError(t, tw.Close())
+	require.NoError(t, f.Close())
+
+	imageTar := filepath.Join(t.TempDir(), "image.tar")
+	require.NoError(t, tarballImage(t, rootfs, imageTar))
+	return imageTar
+}
+
+func tarballImage(t *testing.T, rootfsTar, imageTar string) error {
+	t.Helper()
+
+	layer, err := tarball.LayerFromFile(rootfsTar)
+	if err != nil {
+		return err
+	}
+	img, err := mutate.Append(empty.Image, mutate.Addendum{Layer: layer})
+	if err != nil {
+		return err
+	}
+	ref, err := name.NewTag("test-image:latest")
+	if err != nil {
+		return err
+	}
+	return tarball.WriteToFile(imageTar, ref, img)
 }
 
 func TestLibraryPublisher_Publish_RegistryAllowList(t *testing.T) {

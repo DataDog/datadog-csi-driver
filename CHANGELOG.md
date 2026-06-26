@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `DatadogLibrary` volume publishing to reject library source paths that resolve outside the downloaded library directory.
 - Fixed driver startup to disable SSI publishers when `storageBasePath` is not writable instead of failing initialization
 
 ## [1.2.1] - 2026-02-03

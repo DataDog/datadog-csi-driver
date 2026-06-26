@@ -138,8 +138,33 @@ func (s libraryPublisher) getLibraryPath(volumeCtx map[string]string, volumeID s
 	// Remove leading slash from source to join paths correctly
 	source = strings.TrimPrefix(source, "/")
 	path = filepath.Join(basePath, source)
+	path, err = validateLibrarySourcePath(basePath, path)
+	if err != nil {
+		return "", lib.Image(), err
+	}
 
 	return path, lib.Image(), nil
+}
+
+// validateLibrarySourcePath resolves the bind-mount source and ensures it
+// remains inside the downloaded library directory.
+func validateLibrarySourcePath(basePath, sourcePath string) (string, error) {
+	resolvedBasePath, err := filepath.EvalSymlinks(basePath)
+	if err != nil {
+		return "", fmt.Errorf("could not resolve library base path: %w", err)
+	}
+	resolvedSourcePath, err := filepath.EvalSymlinks(sourcePath)
+	if err != nil {
+		return "", fmt.Errorf("could not resolve library source path: %w", err)
+	}
+	relativePath, err := filepath.Rel(resolvedBasePath, resolvedSourcePath)
+	if err != nil {
+		return "", fmt.Errorf("could not validate library source path: %w", err)
+	}
+	if relativePath == "." || strings.HasPrefix(relativePath, ".."+string(filepath.Separator)) || relativePath == ".." {
+		return "", fmt.Errorf("library source path %q resolves outside library base path", sourcePath)
+	}
+	return resolvedSourcePath, nil
 }
 
 func newLibraryPublisher(fs afero.Afero, mounter mount.Interface, libraryManager *librarymanager.LibraryManager, disabled bool, allowedRegistries []string) Publisher {
