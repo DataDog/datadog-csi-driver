@@ -252,6 +252,13 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		if err != nil {
 			return "", err
 		}
+		// We intentionally do not rewrite the library record here: it already
+		// exists (the volume is linked), so its metadata is left as-is. Known
+		// limitation: if this record was migrated from the legacy schema it has
+		// no package/size, and this recovery path does not backfill it, so it
+		// stays absent from the cached gauges and is cleaned up with an empty
+		// label. This only affects a legacy library that also lost its store
+		// entry and was republished, which is not worth the extra bookkeeping.
 		result = libraryevents.ResolutionDownloaded
 		return storePath, nil
 	}
