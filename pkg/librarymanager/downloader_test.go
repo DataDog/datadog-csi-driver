@@ -13,7 +13,6 @@ import (
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,7 +53,7 @@ func TestDownload(t *testing.T) {
 			require.Equal(t, test.expectedDigest, digest)
 
 			// Ensure downloaded files match the expected.
-			_, err = d.Download(ctx, afero.Afero{Fs: afero.NewOsFs()}, image, tsd.Path(t))
+			_, err = d.Download(ctx, image, tsd.Path(t))
 			require.NoError(t, err, "error found when downloading")
 
 			// Ensure expected files exist.
