@@ -334,7 +334,7 @@ func (lm *LibraryManager) downloadToStore(ctx context.Context, libraryID string,
 
 	log.Info("Downloading library", "image", image)
 	downloadStart := time.Now()
-	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, image, scratch)
+	sizeBytes, err := lm.downloader.Download(ctx, image, scratch)
 	if err != nil {
 		return "", 0, err
 	}

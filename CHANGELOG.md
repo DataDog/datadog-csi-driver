@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RemoveVolume` is now a no-op when the volume was never linked.
 - The on-disk bbolt schema was simplified to two flat buckets (`volumes`, `libraries`) replacing the previous nested `library-mappings`/`volume-mappings` buckets and the per-library metadata bucket. Existing databases are migrated in place on the first start after upgrade, preserving volume links and library metadata.
 
+### Fixed
+
+- Fixed OCI archive extraction for `DatadogLibrary` volumes to prevent archive-planted symlinks from redirecting file writes outside the extraction directory.
+
 ### Notes
 
 - Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` or `library_volume_links` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.
