@@ -206,6 +206,15 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", fmt.Errorf("library cannot be nil")
 	}
 
+	// Serialize the whole resolve/download/link sequence per volume. The
+	// library lock below only excludes operations on the same library, so two
+	// concurrent publishes for the same volume whose mutable tag resolves to
+	// different digests would otherwise lock different libraries, both link,
+	// and leave the volume mounting one library while the DB records the other.
+	// The key is namespaced so it never collides with a library digest lock.
+	lm.locker.Lock(volumeLockKey(volumeID))
+	defer lm.locker.Unlock(volumeLockKey(volumeID))
+
 	// A volume is published once and keeps the same library for its whole
 	// lifetime. If it is already linked, resolve it from its existing record
 	// instead of re-resolving the image: this makes NodePublishVolume
@@ -295,6 +304,12 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 
 	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
+}
+
+// volumeLockKey namespaces a volume ID so its serialization lock can never
+// collide with a library lock, which is keyed by the raw image digest.
+func volumeLockKey(volumeID string) string {
+	return "volume:" + volumeID
 }
 
 // downloadToStore pulls image into a fresh scratch directory and copies it into
