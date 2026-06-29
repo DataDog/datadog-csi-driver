@@ -69,7 +69,12 @@ func (s libraryPublisher) Publish(req *csi.NodePublishVolumeRequest) (*Publisher
 		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: image}, err
 	}
 
-	err = bindMount(s.fs, s.mounter, libraryPath, req.GetTargetPath(), false, true)
+	err = bindMount(s.fs, s.mounter, bindMountArgs{
+		hostPath:   libraryPath,
+		targetPath: req.GetTargetPath(),
+		isFile:     false,
+		readOnly:   true,
+	})
 	if err != nil {
 		return &PublisherResponse{VolumeType: DatadogLibrary, VolumePath: image}, err
 	}

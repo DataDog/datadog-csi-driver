@@ -51,7 +51,12 @@ func TestBindMount_CreatesTargetDirectory(t *testing.T) {
 	// Create source directory
 	require.NoError(t, fs.MkdirAll("/host/dir", 0755))
 
-	err := bindMount(fs, mounter, "/host/dir", "/target/dir", false, false)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/dir",
+		targetPath: "/target/dir",
+		isFile:     false,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	// Verify target directory was created in afero
@@ -75,7 +80,12 @@ func TestBindMount_CreatesTargetFile(t *testing.T) {
 	_, err := fs.Create("/host/socket.sock")
 	require.NoError(t, err)
 
-	err = bindMount(fs, mounter, "/host/socket.sock", "/target/socket.sock", true, false)
+	err = bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/socket.sock",
+		targetPath: "/target/socket.sock",
+		isFile:     true,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	// Verify target file was created in afero
@@ -95,7 +105,12 @@ func TestBindMount_CallsMounter(t *testing.T) {
 	// Create source directory
 	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 
-	err := bindMount(fs, mounter, "/host/path", "/target/path", false, false)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	log := mounter.GetLog()
@@ -112,7 +127,12 @@ func TestBindMount_ReadOnlyRemountsBind(t *testing.T) {
 
 	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 
-	err := bindMount(fs, mounter, "/host/path", "/target/path", false, true)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   true,
+	})
 
 	require.NoError(t, err)
 	require.Len(t, mounter.mounts, 1)
@@ -135,7 +155,12 @@ func TestBindMount_ReadOnlyRemountsAlreadyMountedTarget(t *testing.T) {
 	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 	require.NoError(t, fs.MkdirAll("/target/path", 0755))
 
-	err := bindMount(fs, mounter, "/host/path", "/target/path", false, true)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   true,
+	})
 
 	require.NoError(t, err)
 	assert.Empty(t, mounter.mounts)
