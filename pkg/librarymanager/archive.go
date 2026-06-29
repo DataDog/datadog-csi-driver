@@ -14,33 +14,33 @@ import (
 	"strings"
 
 	"github.com/mholt/archives"
-	"github.com/spf13/afero"
 )
 
 // ArchiveExtractor extracts directories from a tar archive.
 type ArchiveExtractor struct {
 	src    string
-	dst    string      // Absolute path to destination (needed for symlinks, as afero doesn't support them)
-	dstFs  afero.Afero // BasePathFs rooted at destination
+	dst    string // Absolute path to destination
 	format archives.Tar
 
 	// bytesExtracted tracks the cumulative size of regular files written
 	// during Extract. Reset on each Extract call.
 	bytesExtracted int64
+
+	root *os.Root
 }
 
 // NewArchiveExtractor initializes a new archive extractor.
-func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtractor, error) {
+func NewArchiveExtractor(src string, dst string) (*ArchiveExtractor, error) {
 	destination, err := filepath.Abs(filepath.Clean(dst))
 	if err != nil {
 		return nil, fmt.Errorf("could not get absolute path for destination %s: %w", dst, err)
 	}
-	// Create a BasePathFs rooted at the destination to prevent path traversal
-	baseFs := afero.NewBasePathFs(afs.Fs, destination)
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		return nil, fmt.Errorf("could not create destination %s: %w", destination, err)
+	}
 	return &ArchiveExtractor{
 		src:    filepath.Clean("/" + src),
 		dst:    destination,
-		dstFs:  afero.Afero{Fs: baseFs},
 		format: archives.Tar{},
 	}, nil
 }
@@ -50,6 +50,16 @@ func NewArchiveExtractor(afs afero.Afero, src string, dst string) (*ArchiveExtra
 // the regular files written; symlinks and directories are not counted.
 func (fp *ArchiveExtractor) Extract(ctx context.Context, reader io.Reader) (int64, error) {
 	fp.bytesExtracted = 0
+	root, err := os.OpenRoot(fp.dst)
+	if err != nil {
+		return 0, fmt.Errorf("could not open destination root %s: %w", fp.dst, err)
+	}
+	defer func() {
+		_ = root.Close()
+	}()
+	fp.root = root
+	defer func() { fp.root = nil }()
+
 	if err := fp.format.Extract(ctx, reader, fp.processFile); err != nil {
 		return 0, err
 	}
@@ -76,11 +86,10 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		return nil
 	}
 
-	// The dstFs is a BasePathFs rooted at the destination, preventing path traversal
-	mode := f.FileInfo.Mode()
+	mode := f.Mode()
 	switch {
 	case mode.IsDir():
-		return fp.dstFs.Mkdir(destPath, 0o755)
+		return fp.root.Mkdir(destPath, 0o755)
 	case mode&os.ModeSymlink != 0:
 		// Handle symbolic links.
 		// Some packages use symlinks (e.g., dd-lib-python-init for deduplication, apm-inject for versioning).
@@ -90,16 +99,9 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		if linkTarget == "" {
 			return fmt.Errorf("symlink %s has no target", destPath)
 		}
-		fullDestPath := filepath.Clean(filepath.Join(fp.dst, destPath))
-		// Verify the path stays within the destination root
-		if !strings.HasPrefix(fullDestPath, fp.dst+string(filepath.Separator)) {
-			return fmt.Errorf("symlink path %q escapes destination directory", destPath)
-		}
-		// Create the symlink in the destination.
-		// Note: afero does not support symlinks, so we use os.Symlink directly.
-		if err := os.Symlink(linkTarget, fullDestPath); err != nil {
+		if err := fp.root.Symlink(linkTarget, destPath); err != nil {
 			// If symlink already exists with the same target, ignore the error
-			if existing, readErr := os.Readlink(fullDestPath); readErr == nil && existing == linkTarget {
+			if existing, readErr := fp.root.Readlink(destPath); readErr == nil && existing == linkTarget {
 				return nil
 			}
 			return fmt.Errorf("could not create symlink %s -> %s: %w", destPath, linkTarget, err)
@@ -110,13 +112,17 @@ func (fp *ArchiveExtractor) processFile(ctx context.Context, f archives.FileInfo
 		if err != nil {
 			return fmt.Errorf("could not open file in archive: %w", err)
 		}
-		defer in.Close()
+		defer func() {
+			_ = in.Close()
+		}()
 
-		out, err := fp.dstFs.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
+		out, err := fp.root.OpenFile(destPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0755)
 		if err != nil {
 			return fmt.Errorf("could not create destination file: %w", err)
 		}
-		defer out.Close()
+		defer func() {
+			_ = out.Close()
+		}()
 
 		n, err := io.Copy(out, in)
 		if err != nil {

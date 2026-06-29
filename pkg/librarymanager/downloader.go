@@ -15,7 +15,6 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
-	"github.com/spf13/afero"
 )
 
 const (
@@ -42,7 +41,7 @@ func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
 
 // Download will stream a container image and extract the source directory from inside of the image to the destination
 // directory on disk. Returns the cumulative size of the regular files written.
-func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string, dst string) (int64, error) {
+func (d *Downloader) Download(ctx context.Context, image string, dst string) (int64, error) {
 	img, err := crane.Pull(image,
 		crane.WithContext(ctx),
 		crane.WithUserAgent(userAgent),
@@ -59,7 +58,7 @@ func (d *Downloader) Download(ctx context.Context, afs afero.Afero, image string
 	}()
 
 	// Extract the entire image content
-	fp, err := NewArchiveExtractor(afs, "/", dst)
+	fp, err := NewArchiveExtractor("/", dst)
 	if err != nil {
 		return 0, fmt.Errorf("could not setup archive extractor: %w", err)
 	}

@@ -32,7 +32,9 @@ func createHostPath(fs afero.Afero, pathname string, isFile bool) error {
 				log.Error("Failed to create file", "error", err, "path", pathname)
 				return status.Errorf(codes.Internal, "Cannot create file: %v", err)
 			}
-			defer file.Close() // Ensure the file gets closed after creation
+			defer func() {
+				_ = file.Close()
+			}() // Ensure the file gets closed after creation
 			log.Info("Successfully created file", "path", pathname)
 		} else {
 			log.Info("Directory does not exist, creating", "path", pathname)

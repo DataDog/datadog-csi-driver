@@ -1,6 +1,6 @@
 # The base image is already multi-architecture, supporting both amd64 and arm64.
 # GO_VERSION should match the toolchain version in go.mod
-ARG GO_VERSION=1.24
+ARG GO_VERSION=1.25
 FROM golang:${GO_VERSION}-alpine AS builder
 
 WORKDIR /workspace

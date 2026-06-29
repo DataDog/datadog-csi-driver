@@ -7,6 +7,7 @@ package librarymanager_test
 
 import (
 	"archive/tar"
+	"bytes"
 	"context"
 	"os"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
-	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 )
 
@@ -68,7 +68,7 @@ func TestExtract(t *testing.T) {
 
 			// Extract archive.
 			ctx := context.Background()
-			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, test.source, tsd.Path(t))
+			ae, err := librarymanager.NewArchiveExtractor(test.source, tsd.Path(t))
 			require.NoError(t, err, "could not setup extractor")
 			_, err = ae.Extract(ctx, f)
 			require.NoError(t, err, "could not extract archive")
@@ -107,7 +107,7 @@ func TestExtractSymlink(t *testing.T) {
 	defer f.Close()
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 	_, err = ae.Extract(ctx, f)
 	require.NoError(t, err)
@@ -155,7 +155,7 @@ func TestExtractSymlinkPathTraversal(t *testing.T) {
 			defer f.Close()
 
 			ctx := context.Background()
-			ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+			ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 			require.NoError(t, err)
 
 			// Extraction should succeed - malicious paths are normalized, not rejected
@@ -177,6 +177,40 @@ func TestExtractSymlinkPathTraversal(t *testing.T) {
 	}
 }
 
+func TestExtractDoesNotFollowSymlinkOutsideDestination(t *testing.T) {
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "pwned")
+
+	var archive bytes.Buffer
+	tw := tar.NewWriter(&archive)
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "evil",
+		Typeflag: tar.TypeSymlink,
+		Linkname: outside,
+		Mode:     0777,
+	}))
+	require.NoError(t, tw.WriteHeader(&tar.Header{
+		Name:     "evil/pwned",
+		Typeflag: tar.TypeReg,
+		Mode:     0644,
+		Size:     int64(len("owned")),
+	}))
+	_, err := tw.Write([]byte("owned"))
+	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
+	require.NoError(t, err)
+	_, err = ae.Extract(context.Background(), &archive)
+	require.Error(t, err)
+
+	_, err = os.ReadFile(victim)
+	require.True(t, os.IsNotExist(err), "extracting through a symlink must not write outside the destination")
+}
+
 func TestExtractSymlinkIdempotent(t *testing.T) {
 	// Verifies that extracting the same archive twice doesn't fail
 	// when symlinks already exist with the same target (lines 92-95 of archive.go)
@@ -194,7 +228,7 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 	defer tsd.Cleanup(t)
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 
 	// First extraction
@@ -215,7 +249,7 @@ func TestExtractSymlinkIdempotent(t *testing.T) {
 	require.NoError(t, err)
 	defer f2.Close()
 
-	ae2, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae2, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 	_, err = ae2.Extract(ctx, f2)
 	require.NoError(t, err, "second extraction should succeed when symlink already exists with same target")
@@ -246,7 +280,7 @@ func TestExtractSymlinkNoTarget(t *testing.T) {
 	defer archive.Close()
 
 	ctx := context.Background()
-	ae, err := librarymanager.NewArchiveExtractor(afero.Afero{Fs: afero.NewOsFs()}, "/", tsd.Path(t))
+	ae, err := librarymanager.NewArchiveExtractor("/", tsd.Path(t))
 	require.NoError(t, err)
 
 	_, err = ae.Extract(ctx, archive)
