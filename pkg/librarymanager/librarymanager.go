@@ -219,17 +219,32 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		lm.locker.Lock(existingLibraryID)
 		defer lm.locker.Unlock(existingLibraryID)
 
-		// An active link guarantees the library is still on disk: cleanup only
-		// removes a library once its volume count reaches zero. Any error here
-		// (including ErrItemNotFound) is therefore unexpected and surfaces as a
-		// publish failure rather than being treated as a cache miss.
+		// The volume is already linked: reuse its library instead of
+		// re-resolving the image.
 		path, err := lm.store.Get(existingLibraryID)
+		if err != nil && !errors.Is(err, ErrItemNotFound) {
+			return "", err
+		}
+		if path != "" {
+			log.Info("Reusing library already linked to volume", "image", lib.Image(), "path", path)
+			result = libraryevents.ResolutionCacheHit
+			return path, nil
+		}
+
+		// The link points at a library that is no longer on disk. Cleanup only
+		// removes a library once it has no links, so this means the store was
+		// emptied out from under us (host disk cleanup or corruption while the
+		// DB file survived). Re-download the exact same content by digest so
+		// the volume keeps the library it is linked to; the DB still references
+		// it, so no metadata or link needs to change.
+		image := fmt.Sprintf("%s/%s@sha256:%s", lib.Registry(), lib.Name(), existingLibraryID)
+		log.Warn("Linked library missing from store, redownloading", "library_id", existingLibraryID, "image", image)
+		storePath, _, err := lm.downloadToStore(ctx, existingLibraryID, lib, image)
 		if err != nil {
 			return "", err
 		}
-		log.Info("Reusing library already linked to volume", "image", lib.Image(), "path", path)
-		result = libraryevents.ResolutionCacheHit
-		return path, nil
+		result = libraryevents.ResolutionDownloaded
+		return storePath, nil
 	}
 
 	// Fetch the library ID based on the image digest.
@@ -258,28 +273,11 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return path, nil
 	}
 
-	// Otherwise, create a scratch space.
-	scratch, err := afero.TempDir(lm.fs, lm.scratchDir, "datadog-csi-driver-*")
-	if err != nil {
-		return "", fmt.Errorf("could not create scratch directory: %w", err)
-	}
-	defer func() { _ = lm.fs.RemoveAll(scratch) }()
-
-	// Download the library into the scratch space.
-	log.Info("Downloading library", "image", lib.Image())
-	downloadStart := time.Now()
-	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, lib.Image(), scratch)
+	// Otherwise, download the library and copy it into the store.
+	storePath, sizeBytes, err := lm.downloadToStore(ctx, libraryID, lib, lib.Image())
 	if err != nil {
 		return "", err
 	}
-	lm.listener.OnLibraryDownload(lib.Name(), lib.Registry(), time.Since(downloadStart))
-
-	// Copy the library into the store.
-	storePath, err := lm.store.Add(libraryID, scratch)
-	if err != nil {
-		return "", err
-	}
-	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
 
 	// Record the library so its package name and on-disk size are persisted.
 	// AddLibrary is the canonical writer for the per-library record; it must
@@ -297,6 +295,35 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 
 	result = libraryevents.ResolutionDownloaded
 	return storePath, nil
+}
+
+// downloadToStore pulls image into a fresh scratch directory and copies it into
+// the store under libraryID, returning the resulting store path and on-disk
+// size. The caller must hold the library lock. It emits the download event but
+// performs no metadata or link bookkeeping, so it is shared by the cache-miss
+// download path and the recovery path that restores a linked library whose
+// store entry disappeared.
+func (lm *LibraryManager) downloadToStore(ctx context.Context, libraryID string, lib *Library, image string) (string, int64, error) {
+	scratch, err := afero.TempDir(lm.fs, lm.scratchDir, "datadog-csi-driver-*")
+	if err != nil {
+		return "", 0, fmt.Errorf("could not create scratch directory: %w", err)
+	}
+	defer func() { _ = lm.fs.RemoveAll(scratch) }()
+
+	log.Info("Downloading library", "image", image)
+	downloadStart := time.Now()
+	sizeBytes, err := lm.downloader.Download(ctx, lm.fs, image, scratch)
+	if err != nil {
+		return "", 0, err
+	}
+	lm.listener.OnLibraryDownload(lib.Name(), lib.Registry(), time.Since(downloadStart))
+
+	storePath, err := lm.store.Add(libraryID, scratch)
+	if err != nil {
+		return "", 0, err
+	}
+	log.Info("Library downloaded and stored", "image", image, "path", storePath)
+	return storePath, sizeBytes, nil
 }
 
 // linkVolume persists the library/volume link and notifies the listener with

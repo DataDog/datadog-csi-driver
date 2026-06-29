@@ -245,6 +245,71 @@ func TestLibraryManagerReusesLibraryForRepublishedVolume(t *testing.T) {
 	require.Equal(t, libraryevents.CleanupSuccess, singleEvent(t, afterRemove, "cleanup").status)
 }
 
+// TestLibraryManagerRedownloadsLinkedLibraryMissingFromStore covers the
+// recovery path: a volume stays linked in the DB, but its library directory
+// disappears from the store (host disk cleanup or corruption while the DB file
+// survives). Re-publishing the volume must restore the exact same content by
+// digest without re-resolving the tag, re-recording metadata, or adding a link.
+func TestLibraryManagerRedownloadsLinkedLibraryMissingFromStore(t *testing.T) {
+	localRegistry := testutil.NewLocalRegistry(t)
+	defer localRegistry.Stop()
+	localRegistry.AddImage(t, "testdata/image.tar", "test-image", "latest")
+
+	d := librarymanager.NewDownloaderWithRoundTripper(localRegistry.GetRoundTripper(t))
+	tsd := testutil.NewTempScratchDirectory(t)
+	defer tsd.Cleanup(t)
+	basePath := tsd.Path(t)
+	ctx := context.Background()
+
+	rec := &recordingListener{}
+	lm, err := librarymanager.NewLibraryManager(basePath,
+		librarymanager.WithFilesystem(afero.Afero{Fs: afero.NewOsFs()}),
+		librarymanager.WithDownloader(d),
+		librarymanager.WithEventListener(rec),
+	)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, lm.Stop()) }()
+	rec.drain() // discard the startup snapshot
+
+	lib, err := librarymanager.NewLibrary("test-image", localRegistry.Registry(t), "latest", false)
+	require.NoError(t, err)
+
+	// First publish: cache miss -> download and link.
+	firstPath, err := lm.GetLibraryForVolume(ctx, "vol-1", lib)
+	require.NoError(t, err)
+	require.Equal(t, libraryevents.ResolutionDownloaded, singleEvent(t, rec.drain(), "resolved").result)
+
+	// Wipe the library directory from the store while keeping the store root
+	// and the DB link intact, simulating external corruption.
+	storeDir := filepath.Join(basePath, librarymanager.StoreDirectory)
+	entries, err := os.ReadDir(storeDir)
+	require.NoError(t, err)
+	require.NotEmpty(t, entries, "the store should hold the downloaded library")
+	for _, e := range entries {
+		require.NoError(t, os.RemoveAll(filepath.Join(storeDir, e.Name())))
+	}
+
+	// Re-publish the same volume: the link still points at the missing library,
+	// so the manager must redownload the pinned digest and restore the store.
+	restoredPath, err := lm.GetLibraryForVolume(ctx, "vol-1", lib)
+	require.NoError(t, err)
+	require.Equal(t, firstPath, restoredPath, "the restored library must keep its original store path")
+
+	recovery := rec.drain()
+	require.Equal(t, libraryevents.ResolutionDownloaded, singleEvent(t, recovery, "resolved").result)
+	require.Equal(t, "test-image", singleEvent(t, recovery, "download").library,
+		"restoring a missing store entry must redownload the library")
+	require.Empty(t, eventsOfKind(recovery, "cached"), "recovery must not re-record library metadata")
+	require.Empty(t, eventsOfKind(recovery, "linked"), "recovery must not add a link to an already-linked volume")
+	require.NotEmpty(t, testutil.ListFiles(t, storeDir), "the library should be back on disk after recovery")
+
+	// The link count never drifted, so removing the volume evicts the library.
+	require.NoError(t, lm.RemoveVolume(ctx, "vol-1"))
+	afterRemove := rec.drain()
+	require.Equal(t, 0, singleEvent(t, afterRemove, "unlinked").links)
+	require.Equal(t, libraryevents.CleanupSuccess, singleEvent(t, afterRemove, "cleanup").status)
+}
+
 // TestLibraryManagerEmitsFailedResolution checks that a resolution failure
 // (here, an image that cannot be resolved) surfaces as a "failed" resolution
 // and does not link a volume.
