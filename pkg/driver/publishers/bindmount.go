@@ -10,10 +10,15 @@ import (
 	"os"
 
 	"github.com/spf13/afero"
+	"golang.org/x/sys/unix"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/utils/mount"
 )
+
+var remountReadOnlyBind = func(hostPath, targetPath string) error {
+	return unix.Mount(hostPath, targetPath, "", unix.MS_BIND|unix.MS_REMOUNT|unix.MS_RDONLY, "")
+}
 
 // bindMount performs a bind mount from hostPath to targetPath.
 // It creates the target path if it doesn't exist (as file if isFile, directory otherwise).
@@ -45,17 +50,21 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 
 	// Perform bind mount if not already mounted
 	if notMnt {
-		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind"}); err != nil {
+		options := []string{"bind"}
+		if readOnly {
+			options = append(options, "ro")
+		}
+		if err := mounter.Mount(hostPath, targetPath, "", options); err != nil {
 			slog.Error("bindMount: failed to mount", "error", err, "host_path", hostPath, "target_path", targetPath)
 			return status.Errorf(codes.Internal, "bindMount: failed to mount: %v", err)
 		}
 	} else {
 		slog.Info("bindMount: already mounted, skipping", "target_path", targetPath)
-	}
-	if readOnly {
-		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind", "remount", "ro"}); err != nil {
-			slog.Error("bindMount: failed to remount read-only", "error", err, "host_path", hostPath, "target_path", targetPath)
-			return status.Errorf(codes.Internal, "bindMount: failed to remount read-only: %v", err)
+		if readOnly {
+			if err := remountReadOnlyBind(hostPath, targetPath); err != nil {
+				slog.Error("bindMount: failed to remount read-only", "error", err, "host_path", hostPath, "target_path", targetPath)
+				return status.Errorf(codes.Internal, "bindMount: failed to remount read-only: %v", err)
+			}
 		}
 	}
 

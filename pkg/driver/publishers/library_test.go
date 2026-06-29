@@ -201,15 +201,11 @@ func TestLibraryPublisher_Publish_Success(t *testing.T) {
 
 	// Verify mount was called
 	mountLog := mounter.GetLog()
-	require.Len(t, mountLog, 2)
+	require.Len(t, mountLog, 1)
 	assert.Equal(t, "mount", mountLog[0].Action)
 	assert.Equal(t, targetPath, mountLog[0].Target)
 	assert.True(t, strings.Contains(mountLog[0].Source, "datadog-init/package"),
 		"mount source should contain library path, got: %s", mountLog[0].Source)
-	assert.Equal(t, "mount", mountLog[1].Action)
-	assert.Equal(t, targetPath, mountLog[1].Target)
-	assert.True(t, strings.Contains(mountLog[1].Source, "datadog-init/package"),
-		"remount source should contain library path, got: %s", mountLog[1].Source)
 }
 
 func TestRegistryAllowed(t *testing.T) {

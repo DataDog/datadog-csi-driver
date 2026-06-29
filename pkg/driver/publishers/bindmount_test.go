@@ -115,14 +115,22 @@ func TestBindMount_ReadOnlyRemountsBind(t *testing.T) {
 	err := bindMount(fs, mounter, "/host/path", "/target/path", false, true)
 
 	require.NoError(t, err)
-	require.Len(t, mounter.mounts, 2)
-	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind"}}, mounter.mounts[0])
-	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "remount", "ro"}}, mounter.mounts[1])
+	require.Len(t, mounter.mounts, 1)
+	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "ro"}}, mounter.mounts[0])
 }
 
 func TestBindMount_ReadOnlyRemountsAlreadyMountedTarget(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := &recordingMounter{FakeMounter: mount.NewFakeMounter(nil), alreadyMount: true}
+	var remounted []recordedMount
+	originalRemountReadOnlyBind := remountReadOnlyBind
+	remountReadOnlyBind = func(hostPath, targetPath string) error {
+		remounted = append(remounted, recordedMount{source: hostPath, target: targetPath})
+		return nil
+	}
+	t.Cleanup(func() {
+		remountReadOnlyBind = originalRemountReadOnlyBind
+	})
 
 	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 	require.NoError(t, fs.MkdirAll("/target/path", 0755))
@@ -130,6 +138,6 @@ func TestBindMount_ReadOnlyRemountsAlreadyMountedTarget(t *testing.T) {
 	err := bindMount(fs, mounter, "/host/path", "/target/path", false, true)
 
 	require.NoError(t, err)
-	require.Len(t, mounter.mounts, 1)
-	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "remount", "ro"}}, mounter.mounts[0])
+	assert.Empty(t, mounter.mounts)
+	assert.Equal(t, []recordedMount{{source: "/host/path", target: "/target/path"}}, remounted)
 }

@@ -116,13 +116,10 @@ func TestInjectorPreloadPublisher_Publish_Success(t *testing.T) {
 
 	// Verify mount was called
 	log := mounter.GetLog()
-	require.Len(t, log, 2)
+	require.Len(t, log, 1)
 	assert.Equal(t, "mount", log[0].Action)
 	assert.Equal(t, "/var/datadog/ld.so.preload", log[0].Source)
 	assert.Equal(t, "/target/ld.so.preload", log[0].Target)
-	assert.Equal(t, "mount", log[1].Action)
-	assert.Equal(t, "/var/datadog/ld.so.preload", log[1].Source)
-	assert.Equal(t, "/target/ld.so.preload", log[1].Target)
 }
 
 func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
@@ -157,9 +154,9 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Each read-only publish uses bind plus read-only remount.
+	// Each read-only publish uses a single read-only bind mount.
 	log := mounter.GetLog()
-	assert.Len(t, log, 4)
+	assert.Len(t, log, 2)
 }
 
 func TestInjectorPreloadPublisher_Publish_Concurrent(t *testing.T) {
