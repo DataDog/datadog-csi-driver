@@ -49,14 +49,14 @@ func bindMount(afs afero.Afero, mounter mount.Interface, hostPath, targetPath st
 			slog.Error("bindMount: failed to mount", "error", err, "host_path", hostPath, "target_path", targetPath)
 			return status.Errorf(codes.Internal, "bindMount: failed to mount: %v", err)
 		}
-		if readOnly {
-			if err := mounter.Mount(hostPath, targetPath, "", []string{"bind", "remount", "ro"}); err != nil {
-				slog.Error("bindMount: failed to remount read-only", "error", err, "host_path", hostPath, "target_path", targetPath)
-				return status.Errorf(codes.Internal, "bindMount: failed to remount read-only: %v", err)
-			}
-		}
 	} else {
 		slog.Info("bindMount: already mounted, skipping", "target_path", targetPath)
+	}
+	if readOnly {
+		if err := mounter.Mount(hostPath, targetPath, "", []string{"bind", "remount", "ro"}); err != nil {
+			slog.Error("bindMount: failed to remount read-only", "error", err, "host_path", hostPath, "target_path", targetPath)
+			return status.Errorf(codes.Internal, "bindMount: failed to remount read-only: %v", err)
+		}
 	}
 
 	slog.Info("bindMount: successfully mounted", "host_path", hostPath, "target_path", targetPath, "read_only", readOnly)

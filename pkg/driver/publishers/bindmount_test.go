@@ -16,7 +16,8 @@ import (
 
 type recordingMounter struct {
 	*mount.FakeMounter
-	mounts []recordedMount
+	mounts       []recordedMount
+	alreadyMount bool
 }
 
 type recordedMount struct {
@@ -34,6 +35,13 @@ func (m *recordingMounter) Mount(source string, target string, fstype string, op
 		options: append([]string(nil), options...),
 	})
 	return m.FakeMounter.Mount(source, target, fstype, options)
+}
+
+func (m *recordingMounter) IsLikelyNotMountPoint(file string) (bool, error) {
+	if m.alreadyMount {
+		return false, nil
+	}
+	return m.FakeMounter.IsLikelyNotMountPoint(file)
 }
 
 func TestBindMount_CreatesTargetDirectory(t *testing.T) {
@@ -110,4 +118,18 @@ func TestBindMount_ReadOnlyRemountsBind(t *testing.T) {
 	require.Len(t, mounter.mounts, 2)
 	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind"}}, mounter.mounts[0])
 	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "remount", "ro"}}, mounter.mounts[1])
+}
+
+func TestBindMount_ReadOnlyRemountsAlreadyMountedTarget(t *testing.T) {
+	fs := afero.Afero{Fs: afero.NewMemMapFs()}
+	mounter := &recordingMounter{FakeMounter: mount.NewFakeMounter(nil), alreadyMount: true}
+
+	require.NoError(t, fs.MkdirAll("/host/path", 0755))
+	require.NoError(t, fs.MkdirAll("/target/path", 0755))
+
+	err := bindMount(fs, mounter, "/host/path", "/target/path", false, true)
+
+	require.NoError(t, err)
+	require.Len(t, mounter.mounts, 1)
+	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "remount", "ro"}}, mounter.mounts[0])
 }
