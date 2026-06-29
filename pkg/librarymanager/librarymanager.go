@@ -359,13 +359,20 @@ func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string, fromCa
 // If there are no more uses of the library, it is also removed from disk.
 // Calling RemoveVolume for a volume that was never linked is a no-op.
 func (lm *LibraryManager) RemoveVolume(_ context.Context, volumeID string) error {
+	// Serialize against GetLibraryForVolume for the same volume: both take the
+	// per-volume lock so an unpublish can never wipe the link (and trigger the
+	// library's cleanup) in the middle of a concurrent publish that has already
+	// resolved the volume's library but not yet finished reusing it. Different
+	// volumes still proceed concurrently.
+	lm.locker.Lock(volumeLockKey(volumeID))
+	defer lm.locker.Unlock(volumeLockKey(volumeID))
+
 	// Unlink the volume. UnlinkVolume returns both the library it was linked
 	// to and that library's package name (read off the persisted record while
 	// decrementing the count), so we get the gauge label without a separate
-	// lookup before the link is wiped.
-	// Note: No lock needed here because:
-	// - UnlinkVolume is atomic (database has its own locking)
-	// - tryCleanupLibrary acquires the lock before checking and removing
+	// lookup before the link is wiped. tryCleanupLibrary acquires the library
+	// lock before checking and removing (ordering is always volume -> library,
+	// so the two locks never deadlock).
 	libraryID, library, err := lm.db.UnlinkVolume(volumeID)
 	if err != nil {
 		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
