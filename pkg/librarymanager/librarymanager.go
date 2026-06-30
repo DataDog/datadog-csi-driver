@@ -146,9 +146,26 @@ func NewLibraryManager(basePath string, opts ...LibraryManagerOption) (*LibraryM
 	// Seed listener gauges from the persisted state, so dashboards reflect
 	// reality immediately after a driver restart instead of waiting for the
 	// first event.
-	lm.listener.OnSnapshot(lm.db.Snapshot())
+	if snap, err := lm.db.Snapshot(); err != nil {
+		log.Error("could not seed library metrics from persisted state", "error", err)
+	} else {
+		lm.listener.OnSnapshot(snap)
+	}
 
 	return lm, nil
+}
+
+// packageStats reads the per-package aggregates used to label gauge events by
+// indexing a fresh Snapshot. Metrics are best-effort: a read error is logged
+// and reported as zeroed stats so a metrics hiccup never fails the
+// mount/unmount that triggered it.
+func (lm *LibraryManager) packageStats(library string) (cachedCount int, cachedBytes int64, volumeLinks int) {
+	snap, err := lm.db.Snapshot()
+	if err != nil {
+		log.Error("could not read library stats for metrics", "library", library, "error", err)
+		return 0, 0, 0
+	}
+	return snap.CachedCountByLibrary[library], snap.CachedBytesByLibrary[library], snap.VolumeLinksByLibrary[library]
 }
 
 // Stop ensures all dependencies are stopped correctly.
@@ -189,15 +206,72 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 		return "", fmt.Errorf("library cannot be nil")
 	}
 
+	// Serialize the whole resolve/download/link sequence per volume. The
+	// library lock below only excludes operations on the same library, so two
+	// concurrent publishes for the same volume whose mutable tag resolves to
+	// different digests would otherwise lock different libraries, both link,
+	// and leave the volume mounting one library while the DB records the other.
+	// The key is namespaced so it never collides with a library digest lock.
+	lm.locker.Lock(volumeLockKey(volumeID))
+	defer lm.locker.Unlock(volumeLockKey(volumeID))
+
+	// A volume is published once and keeps the same library for its whole
+	// lifetime. If it is already linked, resolve it from its existing record
+	// instead of re-resolving the image: this makes NodePublishVolume
+	// idempotent and stops a volume from ever pointing at two libraries (e.g. a
+	// mutable tag whose digest changed between a failed publish and a retry).
+	existingLibraryID, err := lm.db.GetLibraryForVolume(volumeID)
+	if err != nil {
+		return "", err
+	}
+	if existingLibraryID != "" {
+		lm.locker.Lock(existingLibraryID)
+		defer lm.locker.Unlock(existingLibraryID)
+
+		// The volume is already linked: reuse its library instead of
+		// re-resolving the image.
+		path, err := lm.store.Get(existingLibraryID)
+		if err != nil && !errors.Is(err, ErrItemNotFound) {
+			return "", err
+		}
+		if path != "" {
+			log.Info("Reusing library already linked to volume", "image", lib.Image(), "path", path)
+			result = libraryevents.ResolutionCacheHit
+			return path, nil
+		}
+
+		// The link points at a library that is no longer on disk. Cleanup only
+		// removes a library once it has no links, so this means the store was
+		// emptied out from under us (host disk cleanup or corruption while the
+		// DB file survived). Re-download the exact same content by digest so
+		// the volume keeps the library it is linked to; the DB still references
+		// it, so no metadata or link needs to change.
+		image := fmt.Sprintf("%s/%s@sha256:%s", lib.Registry(), lib.Name(), existingLibraryID)
+		log.Warn("Linked library missing from store, redownloading", "library_id", existingLibraryID, "image", image)
+		storePath, _, err := lm.downloadToStore(ctx, existingLibraryID, lib, image)
+		if err != nil {
+			return "", err
+		}
+		// We intentionally do not rewrite the library record here: it already
+		// exists (the volume is linked), so its metadata is left as-is. Known
+		// limitation: if this record was migrated from the legacy schema it has
+		// no package/size, and this recovery path does not backfill it, so it
+		// stays absent from the cached gauges and is cleaned up with an empty
+		// label. This only affects a legacy library that also lost its store
+		// entry and was republished, which is not worth the extra bookkeeping.
+		result = libraryevents.ResolutionDownloaded
+		return storePath, nil
+	}
+
 	// Fetch the library ID based on the image digest.
 	libraryID, err := lm.cache.FetchDigest(ctx, lib.Image(), lib.Pull())
 	if err != nil {
 		return "", fmt.Errorf("could not determine library ID: %w", err)
 	}
 
-	// Lock the package. The locker prevents cleanup from running while
-	// we resolve, so we can defer LinkVolume to after we have confirmed
-	// the library is on disk and recorded in the metadata bucket.
+	// Lock the package. The locker prevents cleanup from running while we
+	// resolve, so we can defer LinkVolume to after we have confirmed the
+	// library is on disk and recorded in the metadata bucket.
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
 
@@ -208,47 +282,30 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	}
 	if path != "" {
 		log.Info("Library already cached", "image", lib.Image(), "path", path)
-		if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+		if err = lm.linkVolume(libraryID, volumeID, lib.Name(), true); err != nil {
 			return "", err
 		}
 		result = libraryevents.ResolutionCacheHit
 		return path, nil
 	}
 
-	// Otherwise, create a scratch space.
-	scratch, err := afero.TempDir(lm.fs, lm.scratchDir, "datadog-csi-driver-*")
-	if err != nil {
-		return "", fmt.Errorf("could not create scratch directory: %w", err)
-	}
-	defer func() { _ = lm.fs.RemoveAll(scratch) }()
-
-	// Download the library into the scratch space.
-	log.Info("Downloading library", "image", lib.Image())
-	downloadStart := time.Now()
-	sizeBytes, err := lm.downloader.Download(ctx, lib.Image(), scratch)
+	// Otherwise, download the library and copy it into the store.
+	storePath, sizeBytes, err := lm.downloadToStore(ctx, libraryID, lib, lib.Image())
 	if err != nil {
 		return "", err
 	}
-	lm.listener.OnLibraryDownload(lib.Name(), lib.Registry(), time.Since(downloadStart))
 
-	// Copy the library into the store.
-	storePath, err := lm.store.Add(libraryID, scratch)
-	if err != nil {
-		return "", err
-	}
-	log.Info("Library downloaded and stored", "image", lib.Image(), "path", storePath)
-
-	// Record the library in the metadata bucket and notify the listener.
-	// AddLibrary is the canonical writer for the per-library metadata; it
-	// must be called before LinkVolume so the volume-links aggregate has
-	// the right package name to associate the link with.
+	// Record the library so its package name and on-disk size are persisted.
+	// AddLibrary is the canonical writer for the per-library record; it must
+	// run before LinkVolume so the library record exists when the volume
+	// count is incremented.
 	if err := lm.db.AddLibrary(libraryID, lib.Name(), sizeBytes); err != nil {
 		return "", fmt.Errorf("could not record library metadata: %w", err)
 	}
-	count, totalBytes := lm.db.PackageCacheStats(lib.Name())
+	count, totalBytes, _ := lm.packageStats(lib.Name())
 	lm.listener.OnLibraryCached(lib.Name(), count, totalBytes)
 
-	if err := lm.linkVolume(libraryID, volumeID, lib.Name()); err != nil {
+	if err = lm.linkVolume(libraryID, volumeID, lib.Name(), false); err != nil {
 		return "", err
 	}
 
@@ -256,51 +313,85 @@ func (lm *LibraryManager) GetLibraryForVolume(ctx context.Context, volumeID stri
 	return storePath, nil
 }
 
-// linkVolume persists the library/volume link and notifies the listener
-// with the resulting per-library count. It is intentionally a tiny helper:
-// keeping the listener invocation paired with the LinkVolume call avoids
-// the easy mistake of forgetting one of the two.
-func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string) error {
-	if err := lm.db.LinkVolume(libraryID, volumeID); err != nil {
+// volumeLockKey namespaces a volume ID so its serialization lock can never
+// collide with a library lock, which is keyed by the raw image digest.
+func volumeLockKey(volumeID string) string {
+	return "volume:" + volumeID
+}
+
+// downloadToStore pulls image into a fresh scratch directory and copies it into
+// the store under libraryID, returning the resulting store path and on-disk
+// size. The caller must hold the library lock. It emits the download event but
+// performs no metadata or link bookkeeping, so it is shared by the cache-miss
+// download path and the recovery path that restores a linked library whose
+// store entry disappeared.
+func (lm *LibraryManager) downloadToStore(ctx context.Context, libraryID string, lib *Library, image string) (string, int64, error) {
+	scratch, err := afero.TempDir(lm.fs, lm.scratchDir, "datadog-csi-driver-*")
+	if err != nil {
+		return "", 0, fmt.Errorf("could not create scratch directory: %w", err)
+	}
+	defer func() { _ = lm.fs.RemoveAll(scratch) }()
+
+	log.Info("Downloading library", "image", image)
+	downloadStart := time.Now()
+	sizeBytes, err := lm.downloader.Download(ctx, image, scratch)
+	if err != nil {
+		return "", 0, err
+	}
+	lm.listener.OnLibraryDownload(lib.Name(), lib.Registry(), time.Since(downloadStart))
+
+	storePath, err := lm.store.Add(libraryID, scratch)
+	if err != nil {
+		return "", 0, err
+	}
+	log.Info("Library downloaded and stored", "image", image, "path", storePath)
+	return storePath, sizeBytes, nil
+}
+
+// linkVolume persists the library/volume link and notifies the listener with
+// the resulting per-library volume count. It is intentionally a tiny helper:
+// keeping the listener invocation paired with the LinkVolume call avoids the
+// easy mistake of forgetting one of the two.
+func (lm *LibraryManager) linkVolume(libraryID, volumeID, library string, fromCache bool) error {
+	if err := lm.db.LinkVolume(libraryID, volumeID, fromCache); err != nil {
 		return err
 	}
-	lm.listener.OnVolumeLinked(library, lm.db.VolumeLinkCount(library))
+
+	_, _, volumeLinks := lm.packageStats(library)
+	lm.listener.OnVolumeLinked(library, volumeLinks)
 	return nil
 }
 
 // RemoveVolume removes the link between the LibraryID and the VolumeID in the database.
 // If there are no more uses of the library, it is also removed from disk.
 // Calling RemoveVolume for a volume that was never linked is a no-op.
-func (lm *LibraryManager) RemoveVolume(ctx context.Context, volumeID string) error {
-	// Look up the linked library.
-	libraryID, err := lm.db.GetLibraryForVolume(volumeID)
+func (lm *LibraryManager) RemoveVolume(_ context.Context, volumeID string) error {
+	// Serialize against GetLibraryForVolume for the same volume: both take the
+	// per-volume lock so an unpublish can never wipe the link (and trigger the
+	// library's cleanup) in the middle of a concurrent publish that has already
+	// resolved the volume's library but not yet finished reusing it. Different
+	// volumes still proceed concurrently.
+	lm.locker.Lock(volumeLockKey(volumeID))
+	defer lm.locker.Unlock(volumeLockKey(volumeID))
+
+	// Unlink the volume. UnlinkVolume returns both the library it was linked
+	// to and that library's package name (read off the persisted record while
+	// decrementing the count), so we get the gauge label without a separate
+	// lookup before the link is wiped. tryCleanupLibrary acquires the library
+	// lock before checking and removing (ordering is always volume -> library,
+	// so the two locks never deadlock).
+	libraryID, library, err := lm.db.UnlinkVolume(volumeID)
 	if err != nil {
-		return fmt.Errorf("could not determine which library was linked for volume %s: %w", volumeID, err)
+		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
 	}
 	if libraryID == "" {
 		// Nothing to do: the volume was never linked or has already been
 		// removed. We return nil here to keep idempotency.
 		return nil
 	}
-
-	// Resolve the library name now, before the link (and possibly the
-	// metadata) is wiped, so we can notify the listener with the right
-	// gauge label.
-	library, err := lm.db.PackageForLibrary(libraryID)
-	if err != nil {
-		return fmt.Errorf("could not resolve library for ID %s: %w", libraryID, err)
-	}
-
-	// Unlink the volume from the database.
-	// Note: No lock needed here because:
-	// - UnlinkVolume is atomic (database has its own locking)
-	// - tryCleanupLibrary acquires the lock before checking and removing
-	err = lm.db.UnlinkVolume(libraryID, volumeID)
-	if err != nil {
-		return fmt.Errorf("could not unlink volume ID %s: %w", volumeID, err)
-	}
 	if library != "" {
-		lm.listener.OnVolumeUnlinked(library, lm.db.VolumeLinkCount(library))
+		_, _, volumeLinks := lm.packageStats(library)
+		lm.listener.OnVolumeUnlinked(library, volumeLinks)
 	}
 
 	// Schedule cleanup - tryCleanupLibrary will check if the library is still in use
@@ -318,42 +409,36 @@ func (lm *LibraryManager) tryCleanupLibrary(libraryID string) error {
 	lm.locker.Lock(libraryID)
 	defer lm.locker.Unlock(libraryID)
 
-	// Look up the library name up-front so every cleanup event carries the
-	// right label. Older entries on disk that predate the metadata bucket
-	// resolve to an empty string; the cached gauges are skipped for them
-	// (we never tracked them in the first place) but the cleanup counter
-	// is still incremented.
-	library, err := lm.db.PackageForLibrary(libraryID)
+	// Read the library record once: it carries both the package label every
+	// cleanup event needs and the live volume count. Legacy entries that
+	// predate per-library metadata resolve to an empty package; the gauges
+	// were never published for them, but the cleanup counter still fires.
+	info, _, err := lm.db.GetLibrary(libraryID)
 	if err != nil {
 		lm.listener.OnLibraryCleanup("", libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not get library for ID %s: %w", libraryID, err)
 	}
 
 	// Check if the library is still in use
-	count, err := lm.db.GetVolumeCount(libraryID)
-	if err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
-		return fmt.Errorf("could not get linked library count: %w", err)
-	}
-	if count > 0 {
-		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", count)
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSkippedInUse, strategy)
+	if info.VolumeCount > 0 {
+		log.Info("Library still in use, skipping cleanup", "library_id", libraryID, "count", info.VolumeCount)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupSkippedInUse, strategy)
 		return nil
 	}
 	log.Info("Removing library from disk", "library_id", libraryID)
 
 	if err := lm.store.Remove(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupFailed, strategy)
 		return err
 	}
 	if err := lm.db.RemoveLibrary(libraryID); err != nil {
-		lm.listener.OnLibraryCleanup(library, libraryevents.CleanupFailed, strategy)
+		lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupFailed, strategy)
 		return fmt.Errorf("could not remove library metadata for %s: %w", libraryID, err)
 	}
-	if library != "" {
-		newCount, newBytes := lm.db.PackageCacheStats(library)
-		lm.listener.OnLibraryEvicted(library, newCount, newBytes)
+	if info.Package != "" {
+		newCount, newBytes, _ := lm.packageStats(info.Package)
+		lm.listener.OnLibraryEvicted(info.Package, newCount, newBytes)
 	}
-	lm.listener.OnLibraryCleanup(library, libraryevents.CleanupSuccess, strategy)
+	lm.listener.OnLibraryCleanup(info.Package, libraryevents.CleanupSuccess, strategy)
 	return nil
 }
