@@ -154,7 +154,7 @@ func TestInjectorPreloadPublisher_Publish_Idempotent(t *testing.T) {
 	assert.NoError(t, err)
 	require.NotNil(t, resp)
 
-	// Verify mount was called twice
+	// Each read-only publish uses a single read-only bind mount.
 	log := mounter.GetLog()
 	assert.Len(t, log, 2)
 }

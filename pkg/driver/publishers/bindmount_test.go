@@ -14,6 +14,36 @@ import (
 	"k8s.io/utils/mount"
 )
 
+type recordingMounter struct {
+	*mount.FakeMounter
+	mounts       []recordedMount
+	alreadyMount bool
+}
+
+type recordedMount struct {
+	source  string
+	target  string
+	fstype  string
+	options []string
+}
+
+func (m *recordingMounter) Mount(source string, target string, fstype string, options []string) error {
+	m.mounts = append(m.mounts, recordedMount{
+		source:  source,
+		target:  target,
+		fstype:  fstype,
+		options: append([]string(nil), options...),
+	})
+	return m.FakeMounter.Mount(source, target, fstype, options)
+}
+
+func (m *recordingMounter) IsLikelyNotMountPoint(file string) (bool, error) {
+	if m.alreadyMount {
+		return false, nil
+	}
+	return m.FakeMounter.IsLikelyNotMountPoint(file)
+}
+
 func TestBindMount_CreatesTargetDirectory(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
@@ -21,7 +51,12 @@ func TestBindMount_CreatesTargetDirectory(t *testing.T) {
 	// Create source directory
 	require.NoError(t, fs.MkdirAll("/host/dir", 0755))
 
-	err := bindMount(fs, mounter, "/host/dir", "/target/dir", false)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/dir",
+		targetPath: "/target/dir",
+		isFile:     false,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	// Verify target directory was created in afero
@@ -45,7 +80,12 @@ func TestBindMount_CreatesTargetFile(t *testing.T) {
 	_, err := fs.Create("/host/socket.sock")
 	require.NoError(t, err)
 
-	err = bindMount(fs, mounter, "/host/socket.sock", "/target/socket.sock", true)
+	err = bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/socket.sock",
+		targetPath: "/target/socket.sock",
+		isFile:     true,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	// Verify target file was created in afero
@@ -65,7 +105,12 @@ func TestBindMount_CallsMounter(t *testing.T) {
 	// Create source directory
 	require.NoError(t, fs.MkdirAll("/host/path", 0755))
 
-	err := bindMount(fs, mounter, "/host/path", "/target/path", false)
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   false,
+	})
 
 	assert.NoError(t, err)
 	log := mounter.GetLog()
@@ -74,4 +119,50 @@ func TestBindMount_CallsMounter(t *testing.T) {
 	assert.Equal(t, "mount", log[0].Action)
 	assert.Equal(t, "/host/path", log[0].Source)
 	assert.Equal(t, "/target/path", log[0].Target)
+}
+
+func TestBindMount_ReadOnlyRemountsBind(t *testing.T) {
+	fs := afero.Afero{Fs: afero.NewMemMapFs()}
+	mounter := &recordingMounter{FakeMounter: mount.NewFakeMounter(nil)}
+
+	require.NoError(t, fs.MkdirAll("/host/path", 0755))
+
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   true,
+	})
+
+	require.NoError(t, err)
+	require.Len(t, mounter.mounts, 1)
+	assert.Equal(t, recordedMount{source: "/host/path", target: "/target/path", options: []string{"bind", "ro"}}, mounter.mounts[0])
+}
+
+func TestBindMount_ReadOnlyRemountsAlreadyMountedTarget(t *testing.T) {
+	fs := afero.Afero{Fs: afero.NewMemMapFs()}
+	mounter := &recordingMounter{FakeMounter: mount.NewFakeMounter(nil), alreadyMount: true}
+	var remounted []recordedMount
+	originalRemountReadOnlyBind := remountReadOnlyBind
+	remountReadOnlyBind = func(hostPath, targetPath string) error {
+		remounted = append(remounted, recordedMount{source: hostPath, target: targetPath})
+		return nil
+	}
+	t.Cleanup(func() {
+		remountReadOnlyBind = originalRemountReadOnlyBind
+	})
+
+	require.NoError(t, fs.MkdirAll("/host/path", 0755))
+	require.NoError(t, fs.MkdirAll("/target/path", 0755))
+
+	err := bindMount(fs, mounter, bindMountArgs{
+		hostPath:   "/host/path",
+		targetPath: "/target/path",
+		isFile:     false,
+		readOnly:   true,
+	})
+
+	require.NoError(t, err)
+	assert.Empty(t, mounter.mounts)
+	assert.Equal(t, []recordedMount{{source: "/host/path", target: "/target/path"}}, remounted)
 }

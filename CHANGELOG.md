@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `DatadogLibrary` volume publishing to reject library source paths that resolve outside the downloaded library directory.
 - Fixed OCI archive extraction for `DatadogLibrary` volumes to prevent archive-planted symlinks from redirecting file writes outside the extraction directory.
 
+### Fixed
+
+- Fixed `DatadogLibrary` and `DatadogInjectorPreload` volume publishing to remount bind mounts as read-only.
+
 ### Notes
 
 - Libraries cached on disk before this release have no metadata recorded; they are not counted in the `libraries_cached*` or `library_volume_links` gauges until they are downloaded again. The bias is expected to be short-lived because the library publisher is not yet in heavy use.

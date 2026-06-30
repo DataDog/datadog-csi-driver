@@ -46,7 +46,12 @@ func (s localPublisher) Publish(req *csi.NodePublishVolumeRequest) (*PublisherRe
 	resp := &PublisherResponse{VolumeType: volumeType, VolumePath: hostPath}
 	targetPath := req.GetTargetPath()
 
-	return resp, bindMount(s.fs, s.mounter, hostPath, targetPath, false)
+	return resp, bindMount(s.fs, s.mounter, bindMountArgs{
+		hostPath:   hostPath,
+		targetPath: targetPath,
+		isFile:     false,
+		readOnly:   false,
+	})
 }
 
 func (s localPublisher) Unpublish(*csi.NodeUnpublishVolumeRequest) (*PublisherResponse, error) {
