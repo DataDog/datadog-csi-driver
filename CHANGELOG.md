@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `DatadogLibrary` volume publishing to reject library source paths that resolve outside the downloaded library directory.
 - Fixed OCI archive extraction for `DatadogLibrary` volumes to prevent archive-planted symlinks from redirecting file writes outside the extraction directory.
 
 ### Notes
