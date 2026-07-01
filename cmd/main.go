@@ -25,7 +25,8 @@ func init() {
 	// Define flags
 	pflag.String("driver-name", driver.CSIDriverName, "Name of the CSI driver")
 	pflag.String("csi-endpoint", "unix:///csi/csi.sock", "CSI endpoint")
-	pflag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "Dogstatsd socket host path")
+	pflag.String("dsd-host-socket-path", "/var/run/datadog/dsd.socket", "DogStatsD socket host path")
+	pflag.String("dsd-stream-host-socket-path", "/var/run/datadog/dsd-stream.socket", "DogStatsD stream socket host path")
 	pflag.String("apm-host-socket-path", "/var/run/datadog/apm.socket", "APM socket host path")
 	pflag.String("storage-path", "/var/lib/datadog-csi-driver", "Base path for CSI driver storage")
 
