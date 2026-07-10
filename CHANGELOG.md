@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Upgraded `google.golang.org/grpc` from v1.70.0 to v1.79.3 to remediate CVE-2026-33186 (authorization bypass via missing leading slash in `:path`).
+
 ## [1.3.0] - 2026-07-01
 
 ### Added

@@ -22,6 +22,7 @@
 "github.com/hashicorp/golang-lru/v2","https://github.com/hashicorp/golang-lru","['MPL-2.0']","['hashicorp']"
 "github.com/klauspost/compress","https://github.com/klauspost/compress","[]","['klauspost']"
 "github.com/klauspost/pgzip","https://github.com/klauspost/pgzip","['MIT']","['klauspost']"
+"github.com/kylelemons/godebug","https://github.com/kylelemons/godebug","['Apache-2.0']","['kylelemons']"
 "github.com/mholt/archives","https://github.com/mholt/archives","['MIT']","['mholt']"
 "github.com/mikelolasagasti/xz","https://github.com/mikelolasagasti/xz","['0BSD']","['mikelolasagasti']"
 "github.com/minio/minlz","https://github.com/minio/minlz","['Apache-2.0']","['minio']"
