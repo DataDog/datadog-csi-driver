@@ -14,6 +14,7 @@ jobs:
       contents: write
     env:
       REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+      DD_LICENSE_ATTRIBUTION_REF: 58e29701db6c72889f9298ff59717987404659c8
     steps:
       - name: Check out PR branch
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -27,7 +28,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           repository: DataDog/dd-license-attribution
-          ref: 58e29701db6c72889f9298ff59717987404659c8
+          ref: ${{ env.DD_LICENSE_ATTRIBUTION_REF }}
           path: dd-license-attribution
 
       - name: Install dd-license-attribution
@@ -93,8 +94,9 @@ jobs:
               echo "The license attribution command has modified LICENSE-3rdparty.csv."
               echo ""
               echo "To fix this issue:"
-              echo "1. Set up dd-license-attribution locally by following the installation instructions in:"
-              echo "   https://github.com/DataDog/dd-license-attribution"
+              echo "1. Install the SAME pinned version of dd-license-attribution that CI uses"
+              echo "   (newer versions may produce different output and will not match this check):"
+              echo "   pip install git+https://github.com/DataDog/dd-license-attribution@${DD_LICENSE_ATTRIBUTION_REF}"
               echo "2. Run the license CSV generation command locally:"
               echo "   dd-license-attribution generate-sbom-csv \\"
               echo "     --no-scancode-strategy \\"
