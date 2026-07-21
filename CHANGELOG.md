@@ -7,9 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-07-21
+
 ### Security
 
 - Upgraded `google.golang.org/grpc` from v1.70.0 to v1.79.3 to remediate CVE-2026-33186 (authorization bypass via missing leading slash in `:path`).
+- Upgraded `golang.org/x/net` from v0.48.0 to v0.57.0 and `golang.org/x/sys` from v0.39.0 to v0.47.0 to remediate multiple CVEs, notably CVE-2026-39821 (Punycode label handling in `golang.org/x/net/idna`) and CVE-2026-33814 (HTTP/2 transport denial of service).
 
 ## [1.3.0] - 2026-07-01
 
@@ -116,7 +119,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.0...v1.2.1
