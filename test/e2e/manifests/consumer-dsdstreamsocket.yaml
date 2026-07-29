@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer-dsdstreamsocket
+spec:
+  containers:
+  - name: consumer-dsdstreamsocket
+    image: alpine/socat
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        while true; do
+          echo "Hello from DSDStreamSocket" | socat - UNIX-CONNECT:/dsd-stream.sock;
+          sleep 1;
+        done
+    volumeMounts:
+    - name: dd-csi-volume
+      mountPath: /dsd-stream.sock
+  volumes:
+  - name: dd-csi-volume
+    csi:
+      driver: k8s.csi.datadoghq.com
+      volumeAttributes:
+        type: DSDStreamSocket

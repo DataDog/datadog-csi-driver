@@ -21,6 +21,7 @@ func TestUDSConsumerPod(t *testing.T) {
 	}{
 		{"consumer-dsdsocket", "Hello from DSDSocket"},
 		{"consumer-dsdsocketdirectory", "Hello from DSDSocketDirectory"},
+		{"consumer-dsdstreamsocket", "Hello from DSDStreamSocket"},
 		{"consumer-apmsocket", "Hello from APMSocket"},
 		{"consumer-apmsocketdirectory", "Hello from APMSocketDirectory"},
 		{"deprecated-consumer-dsdsocket", "Hello from deprecated DSDSocket"},

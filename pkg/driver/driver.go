@@ -74,7 +74,7 @@ func newDatadogCSIDriver(
 	fs afero.Afero,
 	mounter mount.Interface,
 	logger *log.Logger,
-	name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string,
+	name, apmHostSocketPath, dsdHostSocketPath, dsdStreamHostSocketPath, storageBasePath, version string,
 	apmEnabled bool,
 	allowedRegistries []string,
 ) (*DatadogCSIDriver, error) {
@@ -104,7 +104,7 @@ func newDatadogCSIDriver(
 		name:    name,
 		version: version,
 
-		publisher:      publishers.GetPublishers(fs, mounter, apmHostSocketPath, dsdHostSocketPath, storageBasePath, lm, apmEnabled, allowedRegistries),
+		publisher:      publishers.GetPublishers(fs, mounter, apmHostSocketPath, dsdHostSocketPath, dsdStreamHostSocketPath, storageBasePath, lm, apmEnabled, allowedRegistries),
 		libraryManager: lm,
 		fs:             fs,
 		mounter:        mounter,
@@ -112,7 +112,7 @@ func newDatadogCSIDriver(
 }
 
 // NewDatadogCSIDriver builds and returns a new Datadog CSI driver
-func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBasePath, version string, apmEnabled bool, allowedRegistries []string) (*DatadogCSIDriver, error) {
+func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, dsdStreamHostSocketPath, storageBasePath, version string, apmEnabled bool, allowedRegistries []string) (*DatadogCSIDriver, error) {
 	return newDatadogCSIDriver(
 		afero.Afero{Fs: afero.NewOsFs()},
 		mount.New(""),
@@ -120,6 +120,7 @@ func NewDatadogCSIDriver(name, apmHostSocketPath, dsdHostSocketPath, storageBase
 		name,
 		apmHostSocketPath,
 		dsdHostSocketPath,
+		dsdStreamHostSocketPath,
 		storageBasePath,
 		version,
 		apmEnabled,

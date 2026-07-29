@@ -27,6 +27,7 @@ func registerAndStartCSIDriver(ctx context.Context) error {
 		viper.GetString("driver-name"),
 		viper.GetString("apm-host-socket-path"),
 		viper.GetString("dsd-host-socket-path"),
+		viper.GetString("dsd-stream-host-socket-path"),
 		viper.GetString("storage-path"),
 		Version,
 		viper.GetBool("apm-enabled"),

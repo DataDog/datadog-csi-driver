@@ -41,8 +41,9 @@ func TestSocketPublisher_Publish_TypeSelection(t *testing.T) {
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
 			publisher := socketPublisher{
-				apmSocketPath: "/var/run/apm.sock",
-				dsdSocketPath: "/var/run/dsd.sock",
+				apmSocketPath:       "/var/run/apm.sock",
+				dsdSocketPath:       "/var/run/dsd.sock",
+				dsdStreamSocketPath: "/var/run/dsd-stream.sock",
 			}
 
 			req := &csi.NodePublishVolumeRequest{
@@ -62,7 +63,7 @@ func TestSocketPublisher_Publish_SocketNotFound(t *testing.T) {
 	fs := afero.Afero{Fs: afero.NewMemMapFs()}
 	mounter := mount.NewFakeMounter(nil)
 
-	publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock")
+	publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock", "/var/run/dsd-stream.sock")
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume",
@@ -89,7 +90,7 @@ func TestSocketPublisher_Publish_NotASocket(t *testing.T) {
 	_, err := fs.Create("/var/run/apm.sock")
 	require.NoError(t, err)
 
-	publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock")
+	publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock", "/var/run/dsd-stream.sock")
 
 	req := &csi.NodePublishVolumeRequest{
 		VolumeId:      "test-volume",
@@ -113,6 +114,7 @@ func TestSocketPublisher_Publish_ReturnsCorrectResponse(t *testing.T) {
 	}{
 		{"APMSocket", "APMSocket", "/var/run/apm.sock"},
 		{"DSDSocket", "DSDSocket", "/var/run/dsd.sock"},
+		{"DSDStreamSocket", "DSDStreamSocket", "/var/run/dsd-stream.sock"},
 	}
 
 	for _, tc := range tests {
@@ -120,7 +122,7 @@ func TestSocketPublisher_Publish_ReturnsCorrectResponse(t *testing.T) {
 			fs := afero.Afero{Fs: afero.NewMemMapFs()}
 			mounter := mount.NewFakeMounter(nil)
 
-			publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock")
+			publisher := newSocketPublisher(fs, mounter, "/var/run/apm.sock", "/var/run/dsd.sock", "/var/run/dsd-stream.sock")
 
 			req := &csi.NodePublishVolumeRequest{
 				VolumeId:      "test-volume",

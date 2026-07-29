@@ -12,6 +12,7 @@ spec:
         mkdir -p /socket-dir;
         echo "Listening on dsd.sock and apm.sock...";
         socat -v UNIX-LISTEN:/socket-dir/dsd.sock,fork EXEC:"tee /dev/stderr" &
+        socat -v UNIX-LISTEN:/socket-dir/dsd-stream.sock,fork EXEC:"tee /dev/stderr" &
         socat -v UNIX-LISTEN:/socket-dir/apm.sock,fork EXEC:"tee /dev/stderr" &
         wait
     volumeMounts:
