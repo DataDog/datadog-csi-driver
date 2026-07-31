@@ -33,7 +33,6 @@
 "github.com/opencontainers/image-spec","https://github.com/opencontainers/image-spec","['Apache-2.0']","['opencontainers']"
 "github.com/pelletier/go-toml/v2","https://github.com/pelletier/go-toml","[]","['pelletier']"
 "github.com/pierrec/lz4/v4","https://github.com/pierrec/lz4","['BSD-3-Clause']","['pierrec']"
-"github.com/pkg/errors","https://github.com/pkg/errors","['BSD-2-Clause']","['pkg']"
 "github.com/pmezard/go-difflib","https://github.com/pmezard/go-difflib","[]","['pmezard']"
 "github.com/prometheus/client_golang","https://github.com/prometheus/client_golang","['Apache-2.0']","['prometheus']"
 "github.com/prometheus/client_model","https://github.com/prometheus/client_model","['Apache-2.0']","['prometheus']"
