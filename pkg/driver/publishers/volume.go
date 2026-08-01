@@ -23,9 +23,9 @@ const (
 	DatadogLibrary VolumeType = "DatadogLibrary"
 	// DatadogInjectorPreload mounts the ld.so.preload file
 	DatadogInjectorPreload VolumeType = "DatadogInjectorPreload"
-	// DatadogRustLibraries mounts a Datadog Rust check library from an OCI image
+	// DatadogSharedLibrary mounts a Datadog shared-library check from an OCI image
 	// with owner-only (0500) file permissions, as required by the Agent
 	// shared-library check loader. Same download/mount flow as DatadogLibrary,
 	// which keeps 0755 for APM tracer libraries.
-	DatadogRustLibraries VolumeType = "DatadogRustLibraries"
+	DatadogSharedLibrary VolumeType = "DatadogSharedLibrary"
 )

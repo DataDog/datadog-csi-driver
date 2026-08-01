@@ -56,8 +56,8 @@ func GetPublishers(
 		publishers = append(publishers,
 			// SSI publishers (library and injector preload)
 			newLibraryPublisher(fs, mounter, libraryManager, !apmEnabled, allowedRegistries),
-			// Rust check libraries: same flow as DatadogLibrary but emits 0500.
-			newRustLibraryPublisher(fs, mounter, libraryManager, !apmEnabled, allowedRegistries),
+			// Shared-library checks: same flow as DatadogLibrary but emits 0500.
+			newSharedLibraryPublisher(fs, mounter, libraryManager, !apmEnabled, allowedRegistries),
 			newInjectorPreloadPublisher(fs, mounter, storageBasePath, !apmEnabled),
 		)
 	} else {
