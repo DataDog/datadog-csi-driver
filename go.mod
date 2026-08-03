@@ -19,7 +19,6 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/docker/cli v28.2.2+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
 	github.com/dsnet/compress v0.0.2-0.20230904184137-39efe44ab707 // indirect
@@ -96,6 +95,7 @@ require (
 )
 
 require (
+	github.com/docker/cli v28.2.2+incompatible
 	github.com/google/go-containerregistry v0.20.6
 	github.com/mholt/archives v0.1.5
 	github.com/prometheus/client_model v0.6.1
