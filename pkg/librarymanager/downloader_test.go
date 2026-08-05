@@ -7,11 +7,13 @@ package librarymanager_test
 
 import (
 	"context"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
+	"github.com/Datadog/datadog-csi-driver/pkg/registryauth"
 	"github.com/Datadog/datadog-csi-driver/pkg/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -64,4 +66,31 @@ func TestDownload(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDownloadWithDriverScopedAuthentication(t *testing.T) {
+	const (
+		username = "alice"
+		password = "password"
+	)
+	localRegistry := testutil.NewAuthenticatedLocalRegistry(t, username, password)
+	defer localRegistry.Stop()
+	image := localRegistry.AddImage(t, "testdata/image.tar", "private/test", "latest")
+
+	auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+	config := `{"auths":{"` + localRegistry.Registry(t) + `":{"auth":"` + auth + `"}}}`
+	t.Setenv("DD_APM_REGISTRY_AUTH_0", config)
+	keychain, err := registryauth.NewKeychainFromEnvironment()
+	require.NoError(t, err)
+
+	downloader := librarymanager.NewDownloaderWithKeychain(keychain)
+	ctx := context.Background()
+	digest, err := downloader.FetchDigest(ctx, image)
+	require.NoError(t, err)
+	require.NotEmpty(t, digest)
+
+	scratch := testutil.NewTempScratchDirectory(t)
+	defer scratch.Cleanup(t)
+	_, err = downloader.Download(ctx, image, scratch.Path(t))
+	require.NoError(t, err)
 }

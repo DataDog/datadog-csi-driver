@@ -14,6 +14,7 @@ import (
 	"github.com/Datadog/datadog-csi-driver/pkg/driver/publishers"
 	"github.com/Datadog/datadog-csi-driver/pkg/librarymanager"
 	"github.com/Datadog/datadog-csi-driver/pkg/metrics"
+	"github.com/Datadog/datadog-csi-driver/pkg/registryauth"
 
 	"github.com/container-storage-interface/spec/lib/go/csi"
 	"github.com/spf13/afero"
@@ -89,9 +90,18 @@ func newDatadogCSIDriver(
 
 	var lm *librarymanager.LibraryManager
 	if storageBasePath != "" {
+		downloader := librarymanager.NewDownloader()
+		keychain, err := registryauth.NewKeychainFromEnvironment()
+		if err != nil {
+			return nil, fmt.Errorf("could not configure registry authentication: %w", err)
+		}
+		if keychain != nil {
+			downloader = librarymanager.NewDownloaderWithKeychain(keychain)
+		}
 		lm, err = librarymanager.NewLibraryManager(
 			storageBasePath,
 			librarymanager.WithFilesystem(fs),
+			librarymanager.WithDownloader(downloader),
 			librarymanager.WithCleanupStrategy(librarymanager.NewDelayedCleanupStrategy(cleanupDelay)),
 			librarymanager.WithEventListener(metrics.NewLibraryListener()),
 		)

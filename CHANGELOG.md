@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added driver-scoped private registry authentication for `DatadogLibrary` volumes using Kubernetes image pull Secrets.
+
 ## [1.3.1] - 2026-07-21
 
 ### Security

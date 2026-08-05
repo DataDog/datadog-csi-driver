@@ -15,6 +15,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	imageref "github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/registry"
@@ -26,16 +27,39 @@ import (
 type LocalRegistry struct {
 	srv      *httptest.Server
 	registry string
+	username string
+	password string
 }
 
 // NewLocalRegistry creates a new local OCI registry for testing.
 func NewLocalRegistry(t *testing.T) *LocalRegistry {
 	t.Helper()
-	srv := httptest.NewServer(registry.New(registry.Logger(log.New(io.Discard, "", log.LstdFlags))))
-	return &LocalRegistry{
-		srv:      srv,
-		registry: strings.TrimPrefix(srv.URL, "http://"),
-	}
+	return newLocalRegistry(t, "", "")
+}
+
+// NewAuthenticatedLocalRegistry creates a local OCI registry protected by Basic Auth.
+func NewAuthenticatedLocalRegistry(t *testing.T, username, password string) *LocalRegistry {
+	t.Helper()
+	return newLocalRegistry(t, username, password)
+}
+
+func newLocalRegistry(t *testing.T, username, password string) *LocalRegistry {
+	t.Helper()
+	r := &LocalRegistry{username: username, password: password}
+	registryHandler := registry.New(registry.Logger(log.New(io.Discard, "", log.LstdFlags)))
+	r.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if username != "" {
+			gotUsername, gotPassword, ok := req.BasicAuth()
+			if !ok || gotUsername != username || gotPassword != password {
+				w.Header().Set("WWW-Authenticate", `Basic realm="registry"`)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
+		}
+		registryHandler.ServeHTTP(w, req)
+	}))
+	r.registry = strings.TrimPrefix(r.srv.URL, "http://")
+	return r
 }
 
 // Stop stops the test registry server.
@@ -68,7 +92,14 @@ func (r *LocalRegistry) AddImage(t *testing.T, tarPath, name, version string) st
 	img, err := tarball.ImageFromPath(tarPath, nil)
 	require.NoError(t, err, "could not load tarball image")
 
-	err = crane.Push(img, ref.String(), crane.WithTransport(r.srv.Client().Transport))
+	options := []crane.Option{crane.WithTransport(r.srv.Client().Transport)}
+	if r.username != "" {
+		options = append(options, crane.WithAuth(authn.FromConfig(authn.AuthConfig{
+			Username: r.username,
+			Password: r.password,
+		})))
+	}
+	err = crane.Push(img, ref.String(), options...)
 	require.NoError(t, err, "could not push image to test registry")
 
 	return image
