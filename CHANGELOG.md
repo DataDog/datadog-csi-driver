@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-08-10
+
 ### Security
 
 - Upgraded `github.com/docker/cli` from v28.2.2 to v29.7.0 to remediate CVE-2025-15558 (uncontrolled search path element in Docker CLI plugins leading to local privilege escalation on Windows). The driver only builds for Linux and only imports the credential-config packages, not the affected `cli-plugins` code, so released binaries were never exposed.
@@ -127,7 +129,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.2.1...v1.2.2
