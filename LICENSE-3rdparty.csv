@@ -29,7 +29,7 @@
 "github.com/mitchellh/go-homedir","https://github.com/mitchellh/go-homedir","['MIT']","['mitchellh']"
 "github.com/munnerz/goautoneg","https://github.com/munnerz/goautoneg","[]","['munnerz']"
 "github.com/nwaples/rardecode/v2","https://github.com/nwaples/rardecode","['BSD-2-Clause']","['nwaples']"
-"github.com/opencontainers/go-digest","https://github.com/opencontainers/go-digest","[]","['opencontainers']"
+"github.com/opencontainers/go-digest","https://github.com/opencontainers/go-digest","['Apache-2.0']","['opencontainers']"
 "github.com/opencontainers/image-spec","https://github.com/opencontainers/image-spec","['Apache-2.0']","['opencontainers']"
 "github.com/pelletier/go-toml/v2","https://github.com/pelletier/go-toml","[]","['pelletier']"
 "github.com/pierrec/lz4/v4","https://github.com/pierrec/lz4","['BSD-3-Clause']","['pierrec']"
