@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 )
@@ -25,17 +26,31 @@ const (
 // Downloader enables downloading and extracting directories from container images.
 type Downloader struct {
 	roundTripper http.RoundTripper
+	keychain     authn.Keychain
 }
 
 // NewDownloader creates a new downloader with the default settings.
 func NewDownloader() *Downloader {
-	return NewDownloaderWithRoundTripper(http.DefaultTransport)
+	return newDownloader(http.DefaultTransport, nil)
+}
+
+// NewDownloaderWithKeychain creates a downloader with driver-scoped registry credentials.
+func NewDownloaderWithKeychain(keychain authn.Keychain) *Downloader {
+	return newDownloader(http.DefaultTransport, keychain)
 }
 
 // NewDownloaderWithRoundTripper creates a new downloader with the provided round tripper.
 func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
+	return newDownloader(roundTripper, nil)
+}
+
+func newDownloader(roundTripper http.RoundTripper, keychain authn.Keychain) *Downloader {
+	if keychain == nil {
+		keychain = authn.NewMultiKeychain()
+	}
 	return &Downloader{
 		roundTripper: roundTripper,
+		keychain:     keychain,
 	}
 }
 
@@ -44,6 +59,7 @@ func NewDownloaderWithRoundTripper(roundTripper http.RoundTripper) *Downloader {
 func (d *Downloader) Download(ctx context.Context, image string, dst string) (int64, error) {
 	img, err := crane.Pull(image,
 		crane.WithContext(ctx),
+		crane.WithAuthFromKeychain(d.keychain),
 		crane.WithUserAgent(userAgent),
 		crane.WithTransport(d.roundTripper),
 		crane.WithPlatform(&v1.Platform{OS: runtime.GOOS, Architecture: runtime.GOARCH}),
@@ -74,6 +90,7 @@ func (d *Downloader) Download(ctx context.Context, image string, dst string) (in
 func (d *Downloader) FetchDigest(ctx context.Context, image string) (string, error) {
 	digest, err := crane.Digest(image,
 		crane.WithContext(ctx),
+		crane.WithAuthFromKeychain(d.keychain),
 		crane.WithUserAgent(userAgent),
 		crane.WithTransport(d.roundTripper),
 		crane.WithPlatform(&v1.Platform{OS: runtime.GOOS, Architecture: runtime.GOARCH}),

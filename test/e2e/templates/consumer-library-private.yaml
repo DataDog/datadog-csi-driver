@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: consumer-library-private
+  namespace: default
+spec:
+  containers:
+    - name: consumer-library-private
+      image: busybox
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -e
+          trap 'rc=$?; [ $rc -ne 0 ] && echo "TEST FAILED (exit code: $rc)"; sleep 3600' EXIT
+          test -f /test-library/0.55.0/inject/launcher.preload.so
+          echo "Private library authentication test passed"
+      volumeMounts:
+        - name: dd-library-volume
+          mountPath: /test-library
+          readOnly: true
+  volumes:
+    - name: dd-library-volume
+      csi:
+        driver: k8s.csi.datadoghq.com
+        readOnly: true
+        volumeAttributes:
+          type: DatadogLibrary
+          dd.csi.datadog.com/library.package: apm-inject
+          dd.csi.datadog.com/library.registry: PRIVATE_REGISTRY_ADDRESS/datadog
+          dd.csi.datadog.com/library.version: "0.55.0"

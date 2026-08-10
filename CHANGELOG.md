@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Upgraded `github.com/docker/cli` from v28.2.2 to v29.7.0 to remediate CVE-2025-15558 (uncontrolled search path element in Docker CLI plugins leading to local privilege escalation on Windows). The driver only builds for Linux and only imports the credential-config packages, not the affected `cli-plugins` code, so released binaries were never exposed.
 
+### Added
+
+- Added driver-scoped private registry authentication for `DatadogLibrary` volumes using Kubernetes image pull Secrets.
+
 ## [1.3.1] - 2026-07-21
 
 ### Security
