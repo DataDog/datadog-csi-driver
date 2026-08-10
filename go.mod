@@ -54,7 +54,6 @@ require (
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
@@ -95,7 +94,7 @@ require (
 )
 
 require (
-	github.com/docker/cli v28.2.2+incompatible
+	github.com/docker/cli v29.7.0+incompatible
 	github.com/google/go-containerregistry v0.20.6
 	github.com/mholt/archives v0.1.5
 	github.com/prometheus/client_model v0.6.1

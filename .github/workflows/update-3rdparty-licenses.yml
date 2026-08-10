@@ -68,6 +68,8 @@ jobs:
           PR_USER_TYPE: ${{ github.event.pull_request.user.type }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           GITHUB_HEAD_REF: ${{ github.head_ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
         run: |
           set -e
 
@@ -89,23 +91,36 @@ jobs:
 
               echo "✅ Successfully committed and pushed LICENSE-3rdparty.csv updates"
             else
-              echo "❌ The LICENSE-3rdparty.csv file needs to be updated!"
+              echo "❌ LICENSE-3rdparty.csv is out of date. The diff above is what changed."
               echo ""
-              echo "The license attribution command has modified LICENSE-3rdparty.csv."
+              echo "Fix: download the 'LICENSE-3rdparty.csv' artifact from this workflow run,"
+              echo "replace the file in your branch with it, then commit and push."
               echo ""
-              echo "To fix this issue:"
-              echo "1. Install the SAME pinned version of dd-license-attribution that CI uses"
-              echo "   (newer versions may produce different output and will not match this check):"
-              echo "   pip install git+https://github.com/DataDog/dd-license-attribution@${DD_LICENSE_ATTRIBUTION_REF}"
-              echo "2. Run the license CSV generation command locally:"
-              echo "   dd-license-attribution generate-sbom-csv \\"
-              echo "     --no-scancode-strategy \\"
-              echo "     --no-github-sbom-strategy \\"
-              echo "     https://github.com/DataDog/datadog-csi-driver > LICENSE-3rdparty.csv"
-              echo "3. Commit the updated LICENSE-3rdparty.csv file"
-              echo "4. Push your changes"
+              echo "  gh run download ${GITHUB_RUN_ID} -n LICENSE-3rdparty.csv -R ${GITHUB_REPOSITORY}"
               echo ""
-              echo "This helps keep the 3rd-party license information accurate."
+              echo "To regenerate it yourself instead, run on Linux with a valid GitHub token:"
+              echo ""
+              echo "  pip install git+https://github.com/DataDog/dd-license-attribution@${DD_LICENSE_ATTRIBUTION_REF}"
+              echo "  printf '[{\"original_url\":\"%s\",\"mirror_url\":\"%s\",\"ref_mapping\":{\"branch:%s\":\"branch:%s\"}}]' \\"
+              echo "    '${REPOSITORY_URL}' '${REPOSITORY_URL}' '${DEFAULT_BRANCH}' '${GITHUB_HEAD_REF}' > mirrors.json"
+              echo "  dd-license-attribution generate-sbom-csv --use-mirrors=mirrors.json \\"
+              echo "    --no-scancode-strategy --no-github-sbom-strategy \\"
+              echo "    ${REPOSITORY_URL} > LICENSE-3rdparty.csv"
+              echo ""
+              echo "Caveats, each of which silently produces a wrong file rather than an error:"
+              echo "  - An expired token yields a CSV with only the root component. Check with:"
+              echo "      curl -so /dev/null -w '%{http_code}\\n' -H \"Authorization: Bearer \$GITHUB_TOKEN\" \\"
+              echo "        https://api.github.com/repos/${GITHUB_REPOSITORY}"
+              echo "    'gh auth token' echoes \$GITHUB_TOKEN when set, so unset it first if stale."
+              echo "  - Dependencies resolve per host platform: macOS drops Linux-only modules."
+              echo "  - Without --use-mirrors you generate for '${DEFAULT_BRANCH}', not your branch."
               exit 1
             fi
           fi
+
+      - name: Upload regenerated LICENSE-3rdparty.csv
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: LICENSE-3rdparty.csv
+          path: LICENSE-3rdparty.csv
