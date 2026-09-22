@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-22
+
+### Security
+
+- Minor version bump `golang.org/x/net` v0.57.0 to v0.58.0 and patch version bumps `google.golang.org/grpc` v1.83.0 to v1.83.2, `golang.org/x/text` from v1.83.0 to v1.83.2
+- Build will also bump base image from Alpine v3.24.1 to v3.24.3 addressing OpenSSL related CVE CVE-2026-14456.
+
 ## [1.5.0] - 2026-08-18
 
 ### Security
