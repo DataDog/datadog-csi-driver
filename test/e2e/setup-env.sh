@@ -5,7 +5,19 @@ CLUSTER_NAME="csi-e2e"
 HELM_RELEASE="datadog-csi"
 NAMESPACE="datadog"
 IMAGE_NAME="datadog-csi-driver:dev"
-PLATFORM="linux/$(uname -m)"
+# Prefer the CI-provided $ARCH (authoritative for the matrix leg) over uname -m,
+# which can report the runner host's architecture rather than the intended target
+# on emulated/cross-arch CI fleets. Normalize uname -m's kernel names to Docker's.
+if [ -n "${ARCH:-}" ]; then
+  DOCKER_ARCH="$ARCH"
+else
+  case "$(uname -m)" in
+    x86_64) DOCKER_ARCH="amd64" ;;
+    aarch64|arm64) DOCKER_ARCH="arm64" ;;
+    *) DOCKER_ARCH="$(uname -m)" ;;
+  esac
+fi
+PLATFORM="linux/$DOCKER_ARCH"
 REGISTRY_NAME="csi-e2e-registry"
 REGISTRY_IMAGE="registry:2.8.3"
 REGISTRY_USER="csi-e2e"

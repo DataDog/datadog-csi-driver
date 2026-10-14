@@ -7,7 +7,9 @@ RELEASE_IMAGE_TAG := $(if $(CI_COMMIT_TAG),--tag $(RELEASE_IMAGE),)
 
 # Extract Go version from go.mod
 # Uses the 'go' directive (e.g., "go 1.24.0" -> "1.24")
-GO_VERSION ?= $(shell grep '^go ' go.mod | awk '{print $$2}' | cut -d. -f1,2)
+# `override` ensures this can't be silently shadowed by a stale GO_VERSION
+# set in the environment or as a CI/CD variable.
+override GO_VERSION := $(shell grep '^go ' go.mod | awk '{print $$2}' | cut -d. -f1,2)
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
