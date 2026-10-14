@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Bumped the Go toolchain from v1.25.13 to v1.26.9 to remediate multiple CVEs, including CVE-2026-56857 (`os.Root.Mkdir`/`MkdirAll` junction escape on Windows), CVE-2026-56866 (HTTP/1 CONNECT body desync leading to cross-user response poisoning in reverse proxies), CVE-2026-97031 (TLS ECH outer-extension memory exhaustion), CVE-2026-94439 (HTTP/1 CONNECT request smuggling), CVE-2026-78667 (`Range` header CPU exhaustion in `FileServer`/`ServeContent`/`ServeFile`), CVE-2026-97030 and CVE-2026-94448 (`html/template` escaping bugs), and CVE-2026-94440 (multipart form parsing memory-limit bypass).
+
 ## [1.6.0] - 2026-09-22
 
 ### Security
