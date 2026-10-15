@@ -2,7 +2,7 @@
 include:
   - local: .adms/go/gitlab.yaml
 # Go version is defined in go.mod - this image is used as fallback
-image: registry.ddbuild.io/images/mirror/golang:1.25.13
+image: registry.ddbuild.io/images/mirror/library/golang:1.26.9
 variables:
   PROJECTNAME: "datadog-csi-driver"
   BUILD_DOCKER_REGISTRY: "registry.ddbuild.io/ci"
@@ -21,14 +21,14 @@ stages:
 
 tests:
   stage: test
-  image: registry.ddbuild.io/images/mirror/golang:1.25.13
+  image: registry.ddbuild.io/images/mirror/library/golang:1.26.9
   tags: ["arch:amd64"]
   script:
     - make test
 
 e2e_tests:
   stage: e2e
-  image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_${ARCH_ALT}:v102144341-64dad9f8
+  image: registry.ddbuild.io/ci/datadog-agent-buildimages/docker_${ARCH_ALT}:v144285687-fa4e3624
   tags:
     - docker-in-docker:${ARCH}
   variables:
