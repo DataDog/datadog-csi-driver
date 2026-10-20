@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - Bumped the Go toolchain from v1.26.9 to v1.26.10 to remediate CVE-2026-111943.
+- Upgraded `golang.org/x/net` from v0.60.0 to v0.61.0. No new CVEs beyond those already fixed in v0.60.0 (CVE-2026-78663, CVE-2026-78659, CVE-2026-78669, CVE-2026-78660, CVE-2026-97032); routine patch update for parity with other repos' remediation work.
 
 ## [1.6.1] - 2026-10-16
 
