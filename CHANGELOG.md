@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Bumped the Go toolchain from v1.26.9 to v1.26.10 to remediate CVE-2026-111943.
+
 ## [1.6.1] - 2026-10-16
 
 ### Security
