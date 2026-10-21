@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-20
+
 ### Security
 
 - Bumped the Go toolchain from v1.26.9 to v1.26.10 to remediate CVE-2026-111943.
@@ -154,7 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...HEAD
+[1.6.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.4.0...v1.5.0
