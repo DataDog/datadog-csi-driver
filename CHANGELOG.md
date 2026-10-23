@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-23
+
+### Security
+
+- Rebuilt the container image on Alpine 3.24.3, bumping the `musl` base package from 1.2.6-r2 to 1.2.6-r3 to remediate CVE-2026-107891. No source changes; the runtime image tracks `alpine:latest`, so a fresh build picks up the patched package.
+
 ## [1.6.2] - 2026-10-20
 
 ### Security
@@ -156,7 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.5.0...v1.6.0
