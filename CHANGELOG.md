@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-27
+
+### Security
+
+- Refreshed the final-stage Alpine base image (`alpine:latest`) to pick up Alpine's 2026-10-21 security release, bringing in OpenSSL 3.5.9-r0 and fixing CVE-2026-54873, CVE-2026-72897, CVE-2026-84782, CVE-2026-84784, and additionally CVE-2026-35189, CVE-2026-42772, CVE-2026-54872, CVE-2026-54875, CVE-2026-75804, CVE-2026-75805, CVE-2026-75806, and CVE-2026-77696 from the same OpenSSL advisory, plus musl (CVE-2026-107891), zlib (CVE-2026-85091), and a `ca-certificates` update addressing the eMudhra intermediate CA compromise.
+
 ## [1.6.2] - 2026-10-20
 
 ### Security
@@ -156,7 +162,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.3...HEAD
+[1.6.3]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.1...v1.6.2
 [1.6.1]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/DataDog/datadog-csi-driver/compare/v1.5.0...v1.6.0
