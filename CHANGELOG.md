@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- SSI (Single Step Instrumentation) support (`DatadogLibrary` and `DatadogInjectorPreload` volumes) is now generally available.
+
 ## [1.6.3] - 2026-10-27
 
 ### Security
