@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- SSI library mounting (`DatadogLibrary` volumes) is now generally available.
+- SSI (Single Step Instrumentation) support (`DatadogLibrary` and `DatadogInjectorPreload` volumes) is now generally available.
 
 ## [1.6.3] - 2026-10-27
 
