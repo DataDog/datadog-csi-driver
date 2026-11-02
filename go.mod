@@ -84,7 +84,7 @@ require (
 	github.com/prometheus/client_golang v1.21.1
 	github.com/spf13/afero v1.15.0
 	github.com/stretchr/testify v1.11.1
-	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
