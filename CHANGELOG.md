@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Upgraded `github.com/andybalholm/brotli` from v1.2.0 to v1.2.7 to remediate CVE-2026-111497 (denial of service through excessive allocations when decompressing crafted Brotli streams).
+
 ### Changed
 
 - SSI (Single Step Instrumentation) support (`DatadogLibrary` and `DatadogInjectorPreload` volumes) is now generally available.
