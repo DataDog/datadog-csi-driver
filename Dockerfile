@@ -13,6 +13,11 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags="$LDFLAGS" -o dd-csi-driver ./
 # Alpine's latest tag supports multiple architectures.
 FROM alpine:latest
 
+# Patch OS packages to pick up fixes not yet baked into the base image
+# (e.g. zlib 1.4-r0 for CVE-2026-4738). The driver binary is statically
+# linked (CGO_ENABLED=0) and does not depend on these packages.
+RUN apk upgrade --no-cache
+
 # Copy the binary from the builder to the appropriate location
 COPY --from=builder /workspace/dd-csi-driver /bin/dd-csi-driver
 
