@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Added `apk upgrade --no-cache` to the final-stage image build so OS packages are patched at build time rather than relying on the `alpine:latest` base snapshot. This picks up `zlib` 1.4-r0, remediating CVE-2026-4738 (the fix is published in Alpine's repositories but not yet baked into the base image).
+
 ## [1.6.4] - 2026-11-11
 
 ### Security
