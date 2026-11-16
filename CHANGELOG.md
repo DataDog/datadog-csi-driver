@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-11-16
+
 ### Security
 
 - Added `apk upgrade --no-cache` to the final-stage image build so OS packages are patched at build time rather than relying on the `alpine:latest` base snapshot. This picks up `zlib` 1.4-r0, remediating CVE-2026-4738 (the fix is published in Alpine's repositories but not yet baked into the base image).
@@ -176,7 +178,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Prometheus metrics endpoint for basic telemetry
 - Multi-architecture Docker image support (linux/amd64, linux/arm64)
 
-[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.4...HEAD
+[Unreleased]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.5...HEAD
+[1.6.5]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.4...v1.6.5
 [1.6.4]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.3...v1.6.4
 [1.6.3]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.2...v1.6.3
 [1.6.2]: https://github.com/DataDog/datadog-csi-driver/compare/v1.6.1...v1.6.2
