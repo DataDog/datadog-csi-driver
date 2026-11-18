@@ -14,7 +14,7 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
       - name: Verify Pull Request Labels
-        uses: jesusvasquez333/verify-pr-label-action@v1.4.0
+        uses: jesusvasquez333/verify-pr-label-action@657d111bbbe13e22bbd55870f1813c699bde1401 # v1.4.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           valid-labels: 'bug, enhancement, refactoring, documentation, tooling, dependencies'
